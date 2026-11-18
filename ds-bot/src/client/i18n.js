@@ -1668,6 +1668,10 @@ const ZH = {
   "Open this running session": "打开这个正在运行的会话",
   "A running session keeps using model calls in the background.": "运行中的会话会在后台继续消耗模型调用。",
   "This session is still running. Wait for it to finish, or stop it.": "这个会话还在运行。等它结束，或先停止它。",
+  "Running command": "正在执行操作",
+  "Running {count} steps": "正在执行 {count} 步操作",
+  "Ran 1 step": "已执行 1 步操作",
+  "Ran {count} steps": "已执行 {count} 步操作",
 }
 
 // Host errors stay English, since Bots read them too; they are translated where the

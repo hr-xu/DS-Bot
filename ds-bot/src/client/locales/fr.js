@@ -1719,6 +1719,10 @@ export const FR = {
   "Open this running session": "Ouvrir cette session en cours",
   "A running session keeps using model calls in the background.": "Une session en cours continue d’utiliser des appels au modèle en arrière-plan.",
   "This session is still running. Wait for it to finish, or stop it.": "Cette session est toujours en cours. Attendez la fin ou arrêtez-la.",
+  "Running command": "Action en cours",
+  "Running {count} steps": "Exécution de {count} étapes",
+  "Ran 1 step": "1 étape exécutée",
+  "Ran {count} steps": "{count} étapes exécutées",
 }
 
 export const HOST_ERRORS_FR = [

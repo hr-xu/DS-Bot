@@ -1719,6 +1719,10 @@ export const JA = {
   "Open this running session": "実行中のセッションを開く",
   "A running session keeps using model calls in the background.": "実行中のセッションはバックグラウンドでモデル呼び出しを続けます。",
   "This session is still running. Wait for it to finish, or stop it.": "このセッションはまだ実行中です。終了を待つか、停止してください。",
+  "Running command": "操作を実行中",
+  "Running {count} steps": "{count} ステップを実行中",
+  "Ran 1 step": "1 ステップを実行しました",
+  "Ran {count} steps": "{count} ステップを実行しました",
 }
 
 export const HOST_ERRORS_JA = [

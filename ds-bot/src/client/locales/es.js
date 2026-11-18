@@ -1754,6 +1754,10 @@ export const ES = {
   "Open this running session": "Abrir esta sesión en ejecución",
   "A running session keeps using model calls in the background.": "Una sesión en ejecución sigue usando llamadas al modelo en segundo plano.",
   "This session is still running. Wait for it to finish, or stop it.": "Esta sesión sigue en ejecución. Espera a que termine o detenla.",
+  "Running command": "Ejecutando acción",
+  "Running {count} steps": "Ejecutando {count} pasos",
+  "Ran 1 step": "1 paso ejecutado",
+  "Ran {count} steps": "{count} pasos ejecutados",
 }
 
 export const HOST_ERRORS_ES = [
