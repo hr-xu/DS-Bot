@@ -220,7 +220,7 @@ function PanelStrip({ bot, subjectRoom, roster, subject, view, ids, active, side
           onAuxClick: (event) => { if (event.button === 1) { event.preventDefault(); actions.closePanelWork(subject, workId) } },
         },
           subjectRoom
-            ? h(BotMark, { bot: info.bot, size: 18, state: roster.partsRunning?.[workId] ? 'working' : 'idle' })
+            ? h(BotMark, { bot: info.bot, size: 18, state: info.room.heldMembers?.[info.bot.id] ? 'alert' : roster.partsRunning?.[workId] ? 'working' : 'idle' })
             : h(RoomAvatar, { room: info.room, roster, size: 18 }),
           h('span', { className: 'bt-ptab-title' }, label),
           h('span', {

@@ -256,7 +256,7 @@ function BotSessions({ bot, part, roster, run, useSessions, actions, running }) 
     .filter(room => room.memberSessions?.[bot.id])
     .map(room => {
       const id = room.memberSessions[bot.id]
-      return { id, room, current: part === id, running: runningOf(id) }
+      return { id, room, current: part === id, running: runningOf(id), paused: Boolean(room.heldMembers?.[bot.id]) }
     })
   const rows = useSessions(list => entries.map(entry => list.byId?.[entry.id]), rowsEqual)
   const total = entries.length
@@ -302,8 +302,9 @@ function BotSessions({ bot, part, roster, run, useSessions, actions, running }) 
       },
         h('span', { className: 'bt-agent-session-name' }, entry.room.name),
         h('span', { className: 'bt-agent-session-meta' },
-          entry.running ? h('span', { className: 'bt-agent-session-run', role: 'status' }, t('Running'))
-            : entry.current ? t('Current') : ''))))) : null)
+          entry.paused ? t('Paused')
+            : entry.running ? h('span', { className: 'bt-agent-session-run', role: 'status' }, t('Running'))
+              : entry.current ? t('Current') : ''))))) : null)
 }
 const rowsEqual = (a, b) => a.length === b.length && a.every((row, index) => row?.title === b[index]?.title && row?.updatedAt === b[index]?.updatedAt)
 

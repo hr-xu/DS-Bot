@@ -239,6 +239,8 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     computerShot: attachmentId => call('computer-shot', { attachmentId }),
     computerUserActive: idleSeconds => call('computer-user-active', { idleSeconds }),
     stopMemberWork: (roomId, botId) => after(call('stop-member-work', { roomId, botId })),
+    pauseMemberWork: (roomId, botId) => after(call('pause-member-work', { roomId, botId })),
+    resumeMemberWork: (roomId, botId, note) => after(call('resume-member-work', { roomId, botId, ...(note ? { note } : {}) })),
     // A running part opened from the session list takes no input until it ends.
     newPart: botId => after(call('bot-new-part', { botId })),
     openPart: (botId, sessionId, running = false) => {

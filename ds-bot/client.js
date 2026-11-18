@@ -1027,6 +1027,10 @@ var JA = {
   "{name} paused for your approval": "{name} があなたの承認を待っています",
   "{name} started on it": "{name} が作業を開始しました",
   "You stopped {name}'s work": "{name} の作業を停止しました",
+  "You paused {name}'s work": "{name} の作業を一時停止しました",
+  "You resumed {name}'s work": "{name} の作業を再開しました",
+  "Paused in {name}": "{name} で一時停止中",
+  "Paused · {count} waiting": "一時停止 · {count} 件待機中",
   "{name} finished its work": "{name} が作業を完了しました",
   "{name} was cut off by a restart and picked its work back up": "{name} の作業は再起動で中断されましたが、再開しました",
   "{name} was cut off by a restart again and stopped": "{name} の作業が再び再起動で中断されたため、停止しました",
@@ -3484,6 +3488,10 @@ var KO = {
   "{name} paused for your approval": "{name}이(가) 승인을 기다리며 일시 중지했습니다",
   "{name} started on it": "{name}이(가) 작업을 시작했습니다",
   "You stopped {name}'s work": "{name}의 작업을 중지했습니다",
+  "You paused {name}'s work": "{name}의 작업을 일시 중지했습니다",
+  "You resumed {name}'s work": "{name}의 작업을 재개했습니다",
+  "Paused in {name}": "{name}에서 일시 중지됨",
+  "Paused · {count} waiting": "일시 중지됨 · {count}건 대기 중",
   "{name} finished its work": "{name}이(가) 작업을 마쳤습니다",
   "{name} was cut off by a restart and picked its work back up": "{name}의 작업이 재시작으로 중단되었다가 다시 이어졌습니다",
   "{name} was cut off by a restart again and stopped": "{name}의 작업이 재시작으로 다시 중단되어 멈췄습니다",
@@ -5957,6 +5965,10 @@ var ES = {
   "{name} paused for your approval": "{name} se pausó esperando tu aprobación",
   "{name} started on it": "{name} se puso manos a la obra",
   "You stopped {name}'s work": "Detuviste el trabajo de {name}",
+  "You paused {name}'s work": "Pausaste el trabajo de {name}",
+  "You resumed {name}'s work": "Reanudaste el trabajo de {name}",
+  "Paused in {name}": "En pausa en {name}",
+  "Paused · {count} waiting": "En pausa · {count} en espera",
   "{name} finished its work": "{name} terminó su trabajo",
   "{name} was cut off by a restart and picked its work back up": "{name} se interrumpió por un reinicio y retomó su trabajo",
   "{name} was cut off by a restart again and stopped": "{name} volvió a interrumpirse por un reinicio y se detuvo",
@@ -8401,6 +8413,10 @@ var FR = {
   "{name} paused for your approval": "{name} attend votre approbation",
   "{name} started on it": "{name} s’y est mis",
   "You stopped {name}'s work": "Vous avez arrêté le travail de {name}",
+  "You paused {name}'s work": "Vous avez mis en pause le travail de {name}",
+  "You resumed {name}'s work": "Vous avez repris le travail de {name}",
+  "Paused in {name}": "En pause dans {name}",
+  "Paused · {count} waiting": "En pause · {count} en attente",
   "{name} finished its work": "{name} a terminé son travail",
   "{name} was cut off by a restart and picked its work back up": "{name} a été interrompu par un redémarrage et a repris son travail",
   "{name} was cut off by a restart again and stopped": "{name} a de nouveau été interrompu par un redémarrage et s’est arrêté",
@@ -10858,6 +10874,10 @@ var DE = {
   "{name} paused for your approval": "{name} wartet auf deine Freigabe",
   "{name} started on it": "{name} hat begonnen",
   "You stopped {name}'s work": "Du hast die Arbeit von {name} gestoppt",
+  "You paused {name}'s work": "Du hast die Arbeit von {name} pausiert",
+  "You resumed {name}'s work": "Du hast die Arbeit von {name} fortgesetzt",
+  "Paused in {name}": "Pausiert in {name}",
+  "Paused · {count} waiting": "Pausiert · {count} wartend",
   "{name} finished its work": "{name} ist fertig",
   "{name} was cut off by a restart and picked its work back up": "{name} wurde durch einen Neustart unterbrochen und hat weitergearbeitet",
   "{name} was cut off by a restart again and stopped": "{name} wurde erneut durch einen Neustart unterbrochen und hat gestoppt",
@@ -13326,6 +13346,10 @@ var ZH = {
   "{name} paused for your approval": "{name} 停下来等你批准",
   "{name} started on it": "{name} 开始做了",
   "You stopped {name}'s work": "你停下了 {name} 的工作",
+  "You paused {name}'s work": "你暂停了 {name} 的工作",
+  "You resumed {name}'s work": "你恢复了 {name} 的工作",
+  "Paused in {name}": "在 {name} 中已暂停",
+  "Paused · {count} waiting": "已暂停 · {count} 条待处理",
   "{name} finished its work": "{name} 做完了",
   "{name} was cut off by a restart and picked its work back up": "{name} 的工作被重启打断，已经接着做",
   "{name} was cut off by a restart again and stopped": "{name} 的工作又被重启打断，已停下",
@@ -14978,6 +15002,8 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     computerShot: (attachmentId) => call2("computer-shot", { attachmentId }),
     computerUserActive: (idleSeconds) => call2("computer-user-active", { idleSeconds }),
     stopMemberWork: (roomId, botId) => after(call2("stop-member-work", { roomId, botId })),
+    pauseMemberWork: (roomId, botId) => after(call2("pause-member-work", { roomId, botId })),
+    resumeMemberWork: (roomId, botId, note) => after(call2("resume-member-work", { roomId, botId, ...note ? { note } : {} })),
     // A running part opened from the session list takes no input until it ends.
     newPart: (botId) => after(call2("bot-new-part", { botId })),
     openPart: (botId, sessionId, running = false) => {
@@ -29078,7 +29104,7 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
       if (source.role === "update") return (0, import_react34.createElement)("div", { className: "bt-event" }, t("Profile updated"));
       if (source.role === "post") {
         if (source.logged !== void 0) return null;
-        if (source.failed !== void 0 || source.resumed === true || source.stopped === true || source.done === true) return null;
+        if (source.failed !== void 0 || source.resumed === true || source.stopped === true || source.memberPaused === true || source.memberResumed === true || source.done === true) return null;
         const room2 = roster.roomsById[sessionId];
         const poster = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t("a Bot"), color: "gray" };
         const file = source.length === void 0 ? void 0 : (data.content ?? []).find((block) => block?.type === "file")?.attachment;
@@ -29371,6 +29397,12 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   }
   if (reply.kind === "stopped") {
     return (0, import_react34.createElement)("div", { className: "bt-event" }, t("You stopped {name}'s work", { name: bot.name }));
+  }
+  if (reply.kind === "member-paused") {
+    return (0, import_react34.createElement)("div", { className: "bt-event" }, t("You paused {name}'s work", { name: bot.name }));
+  }
+  if (reply.kind === "member-resumed") {
+    return (0, import_react34.createElement)("div", { className: "bt-event" }, t("You resumed {name}'s work", { name: bot.name }));
   }
   if (reply.kind === "done") {
     const line = (0, import_react34.createElement)("div", { className: "bt-event" }, t("{name} finished its work", { name: bot.name }));
@@ -41605,7 +41637,9 @@ function memberWork(room2, work = NO_WORK) {
     const approvals = (work.approvals ?? []).filter((entry) => entry.botId === id);
     const local = here.find((entry) => entry.botId === id);
     const doing = local ? { ...local, roomId: room2.id } : void 0;
-    return { id, approvals, doing, here: local !== void 0, state: approvals.length > 0 ? "ask" : doing ? "work" : "idle" };
+    const held = room2.heldMembers?.[id];
+    const state = approvals.length > 0 ? "ask" : held ? "paused" : doing ? "work" : "idle";
+    return { id, approvals, doing, held, here: local !== void 0 || held !== void 0, state };
   });
 }
 function busyMembers(room2, work, roster) {
@@ -41737,6 +41771,10 @@ function ApprovalCard({ approval, bot, actions }) {
 }
 function MemberState({ entry, bot }) {
   if (entry?.state === "ask") return stateLine("bt-member-state bt-mw-ask", entry.approvals[0].at, t("Waiting for your approval"));
+  if (entry?.state === "paused") {
+    const label = entry.held?.parked > 0 ? t("Paused · {count} waiting", { count: entry.held.parked }) : t("Paused");
+    return stateLine("bt-member-state", entry.held?.at, label);
+  }
   if (entry?.state !== "work") return bot.role ? stateLine("bt-member-state", void 0, bot.role) : null;
   return stateLine("bt-member-state", entry.doing.since, (0, import_react66.createElement)(Shimmer, null, `${workPhrase(entry.doing)}…`));
 }
@@ -42287,7 +42325,7 @@ function BotSessions({ bot, part, roster, run: run2, useSessions, actions, runni
   ];
   const groupEntries2 = (roster?.rooms ?? []).filter((room2) => room2.memberSessions?.[bot.id]).map((room2) => {
     const id = room2.memberSessions[bot.id];
-    return { id, room: room2, current: part === id, running: runningOf(id) };
+    return { id, room: room2, current: part === id, running: runningOf(id), paused: Boolean(room2.heldMembers?.[bot.id]) };
   });
   const rows2 = useSessions((list) => entries2.map((entry) => list.byId?.[entry.id]), rowsEqual);
   const total = entries2.length;
@@ -42357,7 +42395,7 @@ function BotSessions({ bot, part, roster, run: run2, useSessions, actions, runni
         (0, import_react68.createElement)(
           "span",
           { className: "bt-agent-session-meta" },
-          entry.running ? (0, import_react68.createElement)("span", { className: "bt-agent-session-run", role: "status" }, t("Running")) : entry.current ? t("Current") : ""
+          entry.paused ? t("Paused") : entry.running ? (0, import_react68.createElement)("span", { className: "bt-agent-session-run", role: "status" }, t("Running")) : entry.current ? t("Current") : ""
         )
       )))
     ) : null
@@ -42763,7 +42801,7 @@ function PanelStrip({ bot, subjectRoom, roster, subject, view, ids, active, side
               }
             }
           },
-          subjectRoom ? (0, import_react69.createElement)(BotMark, { bot: info.bot, size: 18, state: roster.partsRunning?.[workId] ? "working" : "idle" }) : (0, import_react69.createElement)(RoomAvatar, { room: info.room, roster, size: 18 }),
+          subjectRoom ? (0, import_react69.createElement)(BotMark, { bot: info.bot, size: 18, state: info.room.heldMembers?.[info.bot.id] ? "alert" : roster.partsRunning?.[workId] ? "working" : "idle" }) : (0, import_react69.createElement)(RoomAvatar, { room: info.room, roster, size: 18 }),
           (0, import_react69.createElement)("span", { className: "bt-ptab-title" }, label),
           (0, import_react69.createElement)("span", {
             className: "bt-ptab-x",
@@ -45133,6 +45171,21 @@ var BackMiniIcon = () => (0, import_react73.createElement)(
   { width: 13, height: 13, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
   (0, import_react73.createElement)("path", { d: "M9.8 3.8L5.5 8l4.3 4.2" })
 );
+var PauseMiniIcon = () => (0, import_react73.createElement)(
+  "svg",
+  { width: 13, height: 13, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", "aria-hidden": true },
+  (0, import_react73.createElement)("path", { d: "M5.5 3.5v9M10.5 3.5v9" })
+);
+var PlayMiniIcon = () => (0, import_react73.createElement)(
+  "svg",
+  { width: 13, height: 13, viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
+  (0, import_react73.createElement)("path", { d: "M5.2 3.6l7.2 4.4-7.2 4.4V3.6z" })
+);
+var StopMiniIcon = () => (0, import_react73.createElement)(
+  "svg",
+  { width: 13, height: 13, viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
+  (0, import_react73.createElement)("rect", { x: 4, y: 4, width: 8, height: 8, rx: 1.8 })
+);
 function ReadOnlyDock({ sessionId, useSessions, useUi, useRoster, actions }) {
   const readOnlyPart = useUi((state) => state.readOnlyPart);
   const groupWork = useRoster((state) => state.groupSessionOf?.[sessionId]);
@@ -45171,9 +45224,39 @@ function ReadOnlyDock({ sessionId, useSessions, useUi, useRoster, actions }) {
     };
   }, [blocksInput]);
   if (groupWork !== void 0) {
+    const held = groupWork.room.heldMembers?.[groupWork.bot.id];
+    const paused = Boolean(held);
+    const parkedCount = Number(held?.parked ?? 0);
+    const canPause = !paused && running && Boolean(actions.pauseMemberWork);
+    const showDock = paused || canPause || inMain;
+    const pausedLabel = parkedCount > 0 ? t("Paused · {count} waiting", { count: parkedCount }) : inMain ? t("Paused in {name}", { name: groupWork.room.name }) : t("Paused");
     return (0, import_react73.createElement)(
       "div",
-      { ref: root, className: "bt-work-dock", hidden: !inMain ? true : void 0, role: "status" },
+      { ref: root, className: "bt-work-dock", hidden: !showDock ? true : void 0, role: "status" },
+      paused ? (0, import_react73.createElement)(
+        "span",
+        { className: "bt-work-pill", "data-tone": "warn" },
+        (0, import_react73.createElement)("span", { className: "bt-work-dot", "aria-hidden": true }),
+        (0, import_react73.createElement)("span", null, pausedLabel)
+      ) : null,
+      paused && actions.resumeMemberWork ? (0, import_react73.createElement)(
+        "button",
+        { type: "button", className: "bt-work-pill", "data-tone": "accent", onClick: () => actions.resumeMemberWork(groupWork.room.id, groupWork.bot.id) },
+        (0, import_react73.createElement)(PlayMiniIcon),
+        (0, import_react73.createElement)("span", null, t("Resume"))
+      ) : null,
+      paused ? (0, import_react73.createElement)(
+        "button",
+        { type: "button", className: "bt-work-pill", onClick: () => actions.stopMemberWork(groupWork.room.id, groupWork.bot.id) },
+        (0, import_react73.createElement)(StopMiniIcon),
+        (0, import_react73.createElement)("span", null, t("Stop"))
+      ) : null,
+      canPause ? (0, import_react73.createElement)(
+        "button",
+        { type: "button", className: "bt-work-pill", onClick: () => actions.pauseMemberWork(groupWork.room.id, groupWork.bot.id) },
+        (0, import_react73.createElement)(PauseMiniIcon),
+        (0, import_react73.createElement)("span", null, t("Pause"))
+      ) : null,
       inMain ? (0, import_react73.createElement)(
         "button",
         { type: "button", className: "bt-work-pill bt-work-back", onClick: () => actions.openSession(groupWork.room.id) },

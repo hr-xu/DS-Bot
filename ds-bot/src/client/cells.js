@@ -841,8 +841,8 @@ export function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnCl
         // A post logged into a running round already shows there, not again as a trigger.
         if (source.logged !== undefined) return null
         // A member's late failure, its work picked up after a restart, its work the user
-        // stopped, or the end of its work shows as an event of the round it opens.
-        if (source.failed !== undefined || source.resumed === true || source.stopped === true || source.done === true) return null
+        // paused, resumed or stopped, or the end of its work shows as an event of the round it opens.
+        if (source.failed !== undefined || source.resumed === true || source.stopped === true || source.memberPaused === true || source.memberResumed === true || source.done === true) return null
         const room = roster.roomsById[sessionId]
         const poster = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t('a Bot'), color: 'gray' }
         // A post past what a message holds came as a file, with its start only.
@@ -1127,6 +1127,12 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   }
   if (reply.kind === 'stopped') {
     return h('div', { className: 'bt-event' }, t("You stopped {name}'s work", { name: bot.name }))
+  }
+  if (reply.kind === 'member-paused') {
+    return h('div', { className: 'bt-event' }, t("You paused {name}'s work", { name: bot.name }))
+  }
+  if (reply.kind === 'member-resumed') {
+    return h('div', { className: 'bt-event' }, t("You resumed {name}'s work", { name: bot.name }))
   }
   if (reply.kind === 'done') {
     const line = h('div', { className: 'bt-event' }, t('{name} finished its work', { name: bot.name }))

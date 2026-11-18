@@ -22,7 +22,9 @@ export function memberWork(room, work = NO_WORK) {
     const approvals = (work.approvals ?? []).filter(entry => entry.botId === id)
     const local = here.find(entry => entry.botId === id)
     const doing = local ? { ...local, roomId: room.id } : undefined
-    return { id, approvals, doing, here: local !== undefined, state: approvals.length > 0 ? 'ask' : doing ? 'work' : 'idle' }
+    const held = room.heldMembers?.[id]
+    const state = approvals.length > 0 ? 'ask' : held ? 'paused' : doing ? 'work' : 'idle'
+    return { id, approvals, doing, held, here: local !== undefined || held !== undefined, state }
   })
 }
 
@@ -155,6 +157,10 @@ function ApprovalCard({ approval, bot, actions }) {
 // A member's second line in the group's details: what it is doing here, or its role.
 export function MemberState({ entry, bot }) {
   if (entry?.state === 'ask') return stateLine('bt-member-state bt-mw-ask', entry.approvals[0].at, t('Waiting for your approval'))
+  if (entry?.state === 'paused') {
+    const label = entry.held?.parked > 0 ? t('Paused · {count} waiting', { count: entry.held.parked }) : t('Paused')
+    return stateLine('bt-member-state', entry.held?.at, label)
+  }
   if (entry?.state !== 'work') return bot.role ? stateLine('bt-member-state', undefined, bot.role) : null
   return stateLine('bt-member-state', entry.doing.since, h(Shimmer, null, `${workPhrase(entry.doing)}…`))
 }

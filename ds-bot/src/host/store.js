@@ -165,6 +165,16 @@ export function install(rt) {
       }
       if (sessionIdOf(room.id) === undefined) room.id = id
       if (!Array.isArray(room.members)) room.members = []
+      if (room.heldMembers !== undefined) {
+        if (room.heldMembers === null || typeof room.heldMembers !== 'object' || Array.isArray(room.heldMembers)) {
+          delete room.heldMembers
+        } else {
+          for (const [botId, held] of Object.entries(room.heldMembers)) {
+            if (!room.members.includes(botId) || !Number.isFinite(held?.at)) delete room.heldMembers[botId]
+          }
+          if (Object.keys(room.heldMembers).length === 0) delete room.heldMembers
+        }
+      }
     }
     if (migrateLocalRoutes(state)) migrated = true
     // A team from before several Main Bots were allowed names a single one.
@@ -584,6 +594,10 @@ export function install(rt) {
   const groupSessionsOf = botId => Object.values(state.rooms).map(room => room.sessions?.[botId]).filter(Boolean)
   const dropGroupSession = (room, botId) => {
     if (room.memberDirs !== undefined) delete room.memberDirs[botId]
+    if (room.heldMembers !== undefined) {
+      delete room.heldMembers[botId]
+      if (Object.keys(room.heldMembers).length === 0) delete room.heldMembers
+    }
     const sessionId = room.sessions?.[botId]
     if (sessionId === undefined) return
     delete room.sessions[botId]
