@@ -20,7 +20,7 @@ export const SCHEDULED_TASK = 'scheduled-task'
 export function commandEntries({ roster, actions }) {
   const entry = (sessionId) => {
     const snapshot = roster.getSnapshot()
-    return snapshot.byId?.[sessionId] ?? snapshot.roomsById?.[sessionId]
+    return snapshot.byId?.[sessionId] ?? snapshot.roomsById?.[sessionId] ?? snapshot.groupSessionOf?.[sessionId]?.bot
   }
   const isRoom = sessionId => roster.getSnapshot().roomsById?.[sessionId] !== undefined
   const isBotSurface = sessionId => entry(sessionId) !== undefined

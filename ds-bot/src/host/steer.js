@@ -22,7 +22,10 @@ export function install(rt) {
   if (typeof ctx.inject === 'function') ctx.inject(['jobs'], attachJobs)
   else if (ctx.get?.('jobs') !== undefined) attachJobs({ jobs: ctx.get('jobs'), effect: (execute, label) => ctx.effect(execute, label) })
 
-  const privateOf = (sessionId) => sessionId !== undefined && rt.chatOwners.has(sessionId) && !rt.groupOwners.has(sessionId)
+  const steerable = (sessionId) => sessionId !== undefined && (
+    (rt.chatOwners.has(sessionId) && !rt.groupOwners.has(sessionId))
+    || rt.groupOwners.has(sessionId)
+  )
   const liveAgent = (sessionId) => ctx.get('agents')?.get(sessionId)
 
   // Per-session state kept by the session/event listener below.
@@ -52,8 +55,11 @@ export function install(rt) {
   const maybeCut = (id) => {
     const entry = rt.live.get(id)
     const agent = liveAgent(id)
-    if (!privateOf(id) || rt.readOnly?.() !== undefined || entry === undefined || agent === undefined) return
-    if ([...(rt.switchJobs?.() ?? [])].some(job => job?.botId === rt.chatOwners.get(id) && job.roomId === undefined)) return
+    const groupOwner = rt.groupOwners.get(id)
+    const botId = rt.chatOwners.get(id) ?? groupOwner?.botId
+    const roomId = groupOwner?.roomId
+    if (!steerable(id) || rt.readOnly?.() !== undefined || entry === undefined || agent === undefined) return
+    if ([...(rt.switchJobs?.() ?? [])].some(job => job?.botId === botId && job.roomId === roomId)) return
     const track = stateOf(id)
     if (track.phase !== 'model' || track.cutting) return
     if (entry.turn === undefined || (entry.calls?.size ?? 0) > 0 || agent.status !== 'running') return
@@ -150,7 +156,7 @@ export function install(rt) {
         const native = def.execute(args, exec)
         const sessionId = exec.agent?.id
         if (args?.run_in_background === true || jobs === undefined || sessionId === undefined
-          || !privateOf(sessionId)) return native
+          || !steerable(sessionId)) return native
         const track = stateOf(sessionId)
         const startedAt = Date.now()
         let steerResolve
@@ -226,7 +232,7 @@ export function install(rt) {
 
   ctx.on('session/event', (session, event) => {
     const id = session?.id
-    if (id === undefined || !privateOf(id)) return
+    if (id === undefined || !steerable(id)) return
     const track = stateOf(id)
     switch (event.type) {
       case 'step/start': {

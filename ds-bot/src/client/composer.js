@@ -177,7 +177,8 @@ export function ComposerPlus({ sessionId, inputActions, useInput, useRoster, act
     const rect = button.current.getBoundingClientRect()
     return { left: rect.left, bottom: viewBottom() - rect.top + 8 }
   }, [shown, open, tick])
-  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id ?? groupWork?.bot?.id
   if (sessionId === undefined || target === undefined) return null
   const fileInput = () => button.current?.closest('[data-composer-card]')?.querySelector('input[type=file]')
   const toggle = () => {

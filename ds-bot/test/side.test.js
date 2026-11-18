@@ -315,7 +315,7 @@ test('a Bot id or an earlier private part asks the current part', async (t) => {
   assert.deepEqual(env.resolved, ['s-now', 's-now'])
 })
 
-test('group chats, an empty question, and a missing route are refused', async (t) => {
+test('group relay chats, an empty question, and a missing route are refused', async (t) => {
   const env = await setup({ gate: true })
   t.after(() => env.stop())
   const { session } = env
@@ -325,10 +325,8 @@ test('group chats, an empty question, and a missing route are refused', async (t
     assert.equal(response.error.message, message)
     assert.equal(response.error.code, code)
   }
-  await refuse('side-ask', { sessionId: 'g-now', text: 'in the group' }, "Side chat is only available in a Bot's private chat.")
-  await refuse('side-ask', { sessionId: 'g-old', text: 'in the old group part' }, "Side chat is only available in a Bot's private chat.")
   await refuse('side-ask', { sessionId: 'r1', text: 'in the room' }, "Side chat is only available in a Bot's private chat.")
-  await refuse('side-new', { sessionId: 'g-now' }, "Side chat is only available in a Bot's private chat.")
+  await refuse('side-new', { sessionId: 'r1' }, "Side chat is only available in a Bot's private chat.")
   await refuse('side-ask', { text: 'no session' }, 'Nothing to ask', 'bot/invalid')
   await refuse('side-new', {}, 'Nothing to open', 'bot/invalid')
   await refuse('side-ask', { sessionId: 's-now', text: '   ' }, 'Write a question.', 'bot/invalid')

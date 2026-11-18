@@ -14,7 +14,7 @@ import { SPRING_LEAD, SPRING_SHAPE, SPRING_TRAIL, reducedMotion, stepMenuFocus, 
 import { FLIGHT_ENDS, INTENT_MS, createFlight, flightEnd, flightStart, planFlight, uniqueIds } from './mark-flight.js'
 import { DetailsDrawer } from './details-drawer.js'
 import { SideChatView } from './side-chat.js'
-import { panelHasStrip, sideChatsOf, stripMenuKeys } from './side-model.js'
+import { panelHasStrip, roomSideChats, sideChatsOf, stripMenuKeys } from './side-model.js'
 import { DotsIcon, FolderIcon, SideIcon, TerminalIcon } from './icons.js'
 import { t } from './i18n.js'
 import { rectsOverlap } from './browser-overlap.js'
@@ -594,14 +594,16 @@ function ImportCard({ flow, page, busy, onApply, onCancel, onCloseAndImport, onD
  */
 export function BotPanel({ pane, current, leaving, room, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, SessionProvider, renderSlot }) {
   const subjectRoom = roster.roomsById?.[pane.id]
-  const bot = roster.byId[pane.id] ?? roster.groupSessionOf?.[pane.id]?.bot
+  const groupWork = roster.groupSessionOf?.[pane.id]
+  const bot = roster.byId[pane.id] ?? groupWork?.bot
   const ownerKey = subjectRoom ? `room:${subjectRoom.id}` : bot ? `bot:${bot.id}` : null
   const workIds = (ownerKey ? (pane.works?.[ownerKey] ?? []) : []).filter(id => id !== current && roster.groupSessionOf?.[id] !== undefined)
   const activeWork = workIds.includes(pane.work) ? pane.work : null
   const activeWorkInfo = activeWork ? roster.groupSessionOf[activeWork] : undefined
   const canBrowse = Boolean(bot && roster.browser === true && actions.browserShow)
-  const sideChats = bot ? sideChatsOf(roster, bot.id) : []
+  const sideChats = subjectRoom ? roomSideChats(roster, subjectRoom.id) : bot ? sideChatsOf(roster, bot.id, groupWork?.room.id) : []
   const sideChat = sideChats.find(chat => chat?.id === pane.side)
+  const sideSubject = sideChat?.botId && subjectRoom ? (subjectRoom.memberSessions?.[sideChat.botId] ?? pane.id) : pane.id
   const view = pane.view === 'browser' && canBrowse ? 'browser'
     : pane.view === 'side' && sideChat !== undefined ? 'side'
       : pane.view === 'work' && activeWork !== null ? 'work'
@@ -814,13 +816,13 @@ export function BotPanel({ pane, current, leaving, room, overlay, roster, action
     // Over the whole window while dragging: the cursor stays a resize cursor and the
     // pages underneath (the chat, the guest) see no pointer.
     dragging ? createPortal(h('div', { className: 'bt-drag-shield', 'aria-hidden': true }), document.body) : null,
-    hasStrip ? h(PanelStrip, { bot, subjectRoom, roster, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, works: workIds, work: activeWork, activeWorkInfo, canBrowse, canSide: !subjectRoom, reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
+    hasStrip ? h(PanelStrip, { bot, subjectRoom, roster, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, works: workIds, work: activeWork, activeWorkInfo, canBrowse, canSide: !subjectRoom || view === 'work', reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
     view === 'browser' && bot
       ? h(BrowserView, { key: `browser:${active}`, bot, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold })
       : view === 'work' && activeWork && activeWorkInfo
         ? h(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions })
         : view === 'side' && sideChat
-          ? h('div', { key: `side:${sideChat.id}`, className: 'bt-panel-view' }, h(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions }))
+          ? h('div', { key: `side:${sideChat.id}`, className: 'bt-panel-view' }, h(SideChatView, { subject: sideSubject, chat: sideChat, roster, actions: panelActions }))
           : h('div', { key: `details:${pane.id}:${pane.renaming ? 'rename' : ''}:${pane.tab ?? ''}`, className: 'bt-panel-view' },
               h(DetailsDrawer, {
                 sessionId: pane.id, startRenaming: pane.renaming, startTab: pane.tab, hasStrip,

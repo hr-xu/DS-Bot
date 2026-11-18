@@ -633,9 +633,9 @@ export function install(rt) {
   }
 
   // The batch the turn with trigger `info` answers. The call names who asked; a turn that
-  // names nobody (not a call of the group) answers the oldest batch the member is in.
+  // names nobody (not a call of the group or an ad-hoc user steer) answers the oldest batch the member is in.
   const batchOfTurn = (roomId, botId, info) => (info?.askedBy !== undefined ? batchOf(roomId, botId, info.askedBy) : undefined)
-    ?? (info?.role !== 'room' ? batchesOf(roomId, botId)[0] : undefined)
+    ?? (info?.role !== 'room' && info?.role !== 'user-steer' ? batchesOf(roomId, botId)[0] : undefined)
 
   // The member's work for one batch is over. A batch whose wake is posted to the group
   // (`keep`) stays until that post, the last one that names it, is taken in (closeBatch),
@@ -1874,6 +1874,40 @@ export function install(rt) {
   // The user stops a member's work in this group from the group's details, including
   // any running DSH subagents it spawned (#701). Messages still waiting for that
   // member here go with it.
+  const stoppingMemberSessions = new Set()
+
+  // A user message typed directly inside a member's group working Session is logged into
+  // the group's ledger so the group chat, mobile clients, and peer members stay in sync.
+  function noteGroupMemberInput(sessionId, rawText, via) {
+    if (!writes()) return
+    const { room, member } = memberIn(sessionId) ?? {}
+    if (room === undefined || member === undefined) return
+    const trimmed = String(rawText ?? '').trim()
+    const alreadyNamed = trimmed !== '' && mentionsIn(trimmed, [member]).found.some(bot => bot.id === member.id)
+    const ledgerText = alreadyNamed ? trimmed : `@${member.name}${trimmed ? ` ${trimmed}` : ''}`
+    const record = say(room, { who: 'User', text: ledgerText, ...(via ? { via } : {}) })
+    if ((room.seen?.[member.id] ?? 0) === record.seq - 1) {
+      room.seen ??= {}
+      room.seen[member.id] = record.seq
+    }
+    clearIdleStreak(room)
+    void rt.save().catch(() => {})
+  }
+  rt.noteGroupMemberInput = noteGroupMemberInput
+
+  async function noteGroupUserAbort(sessionId) {
+    if (!writes() || stoppingMemberSessions.has(sessionId)) return
+    const { room, member } = memberIn(sessionId) ?? {}
+    if (room === undefined || member === undefined) return
+    dropMemberFromBatch(room, member.id)
+    await rt.stopSubagents?.(sessionId)
+    rt.goalTaskReset?.(room.id, member.id, 'Stopped by the user')
+    rt.blockTasks?.(room.id, member.id, { cause: 'stopped' })
+    rt.goalUserStopped?.(room.id)
+    await postToRoom(room, member, '', { quiet: true, stopped: true })
+  }
+  rt.noteGroupUserAbort = noteGroupUserAbort
+
   async function stopMemberWork(roomId, botId) {
     await rt.load()
     const room = rt.roomOf(roomId)
@@ -1885,8 +1919,13 @@ export function install(rt) {
     dropMemberFromBatch(room, botId)
     await rt.stopSubagents?.(sessionId)
     if (turnRunning) {
-      const agent = await rt.resolveAgent(sessionId)
-      agent.cancel({ kind: 'user' })
+      stoppingMemberSessions.add(sessionId)
+      try {
+        const agent = await rt.resolveAgent(sessionId)
+        agent.cancel({ kind: 'user' })
+      } finally {
+        setTimeout(() => stoppingMemberSessions.delete(sessionId), 0)
+      }
     }
     rt.goalTaskReset?.(roomId, botId, 'Stopped by the user')
     rt.blockTasks?.(roomId, botId, { cause: 'stopped' })

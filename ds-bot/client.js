@@ -14732,7 +14732,20 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     return null;
   };
   const openSideChat = (sessionId, chatId) => {
-    ui2.set((state) => ({ ...state, details: sessionId, view: "side", side: chatId ?? null, renaming: false, tab: null, panelYield: yieldTo(state, "side") }));
+    ui2.set((state) => {
+      const snap = roster.getSnapshot();
+      const groupWork = snap?.groupSessionOf?.[sessionId];
+      const keepRoom = groupWork !== void 0 && state.details !== null && snap?.roomsById?.[state.details]?.id === groupWork.room.id;
+      return {
+        ...state,
+        details: keepRoom ? state.details : sessionId,
+        view: "side",
+        side: chatId ?? null,
+        renaming: false,
+        tab: null,
+        panelYield: yieldTo(state, "side")
+      };
+    });
   };
   const openSettings = (page = "general", id = null) => {
     ui2.set((state) => ({ ...state, settings: { page, id }, menu: null, palette: null, newChat: null }));
@@ -14779,10 +14792,13 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       ui2.set((state) => {
         if (!state.details || state.details === id) return state;
         const snap = roster.getSnapshot();
-        const ownerBot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot;
+        const nextRoom = snap.roomsById?.[id];
+        const groupWork = snap.groupSessionOf?.[id];
+        const ownerBot = snap.byId[id] ?? groupWork?.bot;
         const nextKey = workKeyOf(snap, id);
         const nextWorks = nextKey ? state.works?.[nextKey] ?? [] : [];
-        const view = state.view === "browser" && ownerBot === void 0 ? "details" : state.view === "side" && !(snap.sideChats?.[ownerBot?.id] ?? []).some((chat) => chat?.id === state.side) ? "details" : state.view === "work" && (!state.work || state.work === id || !nextWorks.includes(state.work) || snap.groupSessionOf?.[state.work] === void 0) ? "details" : state.view;
+        const hasSide = nextRoom ? Object.values(snap.sideChats ?? {}).some((list) => Array.isArray(list) && list.some((chat) => chat?.id === state.side && chat?.roomId === nextRoom.id)) : (snap.sideChats?.[ownerBot?.id] ?? []).some((chat) => chat?.id === state.side && (chat?.roomId ?? void 0) === groupWork?.room.id);
+        const view = state.view === "browser" && ownerBot === void 0 ? "details" : state.view === "side" && !hasSide ? "details" : state.view === "work" && (!state.work || state.work === id || !nextWorks.includes(state.work) || snap.groupSessionOf?.[state.work] === void 0) ? "details" : state.view;
         return { ...state, details: id, view, renaming: false, tab: null };
       });
     },
@@ -29739,7 +29755,7 @@ function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, us
   const liveKey = useLive((state) => JSON.stringify(state[sessionId] ?? {}));
   const steeredAt = useWork?.((work) => work.steered?.[sessionId]);
   const pendingInput = useSession((snapshot) => freshInputAt(snapshot?.pendingSubmissions, steeredAt));
-  const bot = roster.byId[sessionId];
+  const bot = roster.byId[sessionId] ?? roster.groupSessionOf?.[sessionId]?.bot;
   const room2 = roster.roomsById[sessionId];
   const moveAt = useWork?.((work) => {
     const entry = bot !== void 0 ? work.bots?.[bot.id] : room2 !== void 0 ? work.rooms?.[room2.id]?.find((item) => item.self === true) : void 0;
@@ -38777,7 +38793,8 @@ function ComposerPlus({ sessionId, inputActions, useInput, useRoster, actions })
     const rect = button.current.getBoundingClientRect();
     return { left: rect.left, bottom: viewBottom() - rect.top + 8 };
   }, [shown, open, tick]);
-  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id;
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id ?? groupWork?.bot?.id;
   if (sessionId === void 0 || target === void 0) return null;
   const fileInput = () => button.current?.closest("[data-composer-card]")?.querySelector("input[type=file]");
   const toggle = () => {
@@ -38935,12 +38952,23 @@ var LOADING_REFUSAL = "DS Bot is still loading this chat.";
 function sideSurface(roster, sessionId) {
   if (!roster?.ready) return "unknown";
   if (roster.roomsById?.[sessionId]) return "group";
-  if (roster.byId?.[sessionId]) return "bot";
+  if (roster.byId?.[sessionId] || roster.groupSessionOf?.[sessionId]) return "bot";
   return "other";
 }
-function sideChatsOf(roster, botId) {
+function sideChatsOf(roster, botId, roomId) {
   const chats = roster?.sideChats?.[botId];
-  return Array.isArray(chats) ? chats : [];
+  if (!Array.isArray(chats)) return [];
+  return chats.filter((chat) => (chat?.roomId ?? void 0) === roomId);
+}
+function roomSideChats(roster, roomId) {
+  const all = [];
+  for (const [botId, list] of Object.entries(roster?.sideChats ?? {})) {
+    if (!Array.isArray(list)) continue;
+    for (const chat of list) {
+      if (chat?.roomId === roomId) all.push({ ...chat, botId });
+    }
+  }
+  return all;
 }
 function parseSideLine(line) {
   const trimmed2 = String(line ?? "").trim();
@@ -43247,14 +43275,16 @@ function ImportCard({ flow, page, busy, onApply, onCancel, onCloseAndImport, onD
 }
 function BotPanel({ pane, current: current2, leaving, room: room2, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, SessionProvider, renderSlot }) {
   const subjectRoom = roster.roomsById?.[pane.id];
-  const bot = roster.byId[pane.id] ?? roster.groupSessionOf?.[pane.id]?.bot;
+  const groupWork = roster.groupSessionOf?.[pane.id];
+  const bot = roster.byId[pane.id] ?? groupWork?.bot;
   const ownerKey = subjectRoom ? `room:${subjectRoom.id}` : bot ? `bot:${bot.id}` : null;
   const workIds = (ownerKey ? pane.works?.[ownerKey] ?? [] : []).filter((id) => id !== current2 && roster.groupSessionOf?.[id] !== void 0);
   const activeWork = workIds.includes(pane.work) ? pane.work : null;
   const activeWorkInfo = activeWork ? roster.groupSessionOf[activeWork] : void 0;
   const canBrowse = Boolean(bot && roster.browser === true && actions.browserShow);
-  const sideChats = bot ? sideChatsOf(roster, bot.id) : [];
+  const sideChats = subjectRoom ? roomSideChats(roster, subjectRoom.id) : bot ? sideChatsOf(roster, bot.id, groupWork?.room.id) : [];
   const sideChat = sideChats.find((chat) => chat?.id === pane.side);
+  const sideSubject = sideChat?.botId && subjectRoom ? subjectRoom.memberSessions?.[sideChat.botId] ?? pane.id : pane.id;
   const view = pane.view === "browser" && canBrowse ? "browser" : pane.view === "side" && sideChat !== void 0 ? "side" : pane.view === "work" && activeWork !== null ? "work" : "details";
   const tabState = useBrowserTabs((map) => bot ? map[bot.id] ?? EMPTY_TABS2 : EMPTY_TABS2);
   const active = tabState.active;
@@ -43479,8 +43509,8 @@ function BotPanel({ pane, current: current2, leaving, room: room2, overlay, rost
     // Over the whole window while dragging: the cursor stays a resize cursor and the
     // pages underneath (the chat, the guest) see no pointer.
     dragging ? (0, import_react_dom11.createPortal)((0, import_react69.createElement)("div", { className: "bt-drag-shield", "aria-hidden": true }), document.body) : null,
-    hasStrip ? (0, import_react69.createElement)(PanelStrip, { bot, subjectRoom, roster, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, works: workIds, work: activeWork, activeWorkInfo, canBrowse, canSide: !subjectRoom, reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
-    view === "browser" && bot ? (0, import_react69.createElement)(BrowserView, { key: `browser:${active}`, bot, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold }) : view === "work" && activeWork && activeWorkInfo ? (0, import_react69.createElement)(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions }) : view === "side" && sideChat ? (0, import_react69.createElement)("div", { key: `side:${sideChat.id}`, className: "bt-panel-view" }, (0, import_react69.createElement)(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions })) : (0, import_react69.createElement)(
+    hasStrip ? (0, import_react69.createElement)(PanelStrip, { bot, subjectRoom, roster, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, works: workIds, work: activeWork, activeWorkInfo, canBrowse, canSide: !subjectRoom || view === "work", reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
+    view === "browser" && bot ? (0, import_react69.createElement)(BrowserView, { key: `browser:${active}`, bot, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold }) : view === "work" && activeWork && activeWorkInfo ? (0, import_react69.createElement)(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions }) : view === "side" && sideChat ? (0, import_react69.createElement)("div", { key: `side:${sideChat.id}`, className: "bt-panel-view" }, (0, import_react69.createElement)(SideChatView, { subject: sideSubject, chat: sideChat, roster, actions: panelActions })) : (0, import_react69.createElement)(
       "div",
       { key: `details:${pane.id}:${pane.renaming ? "rename" : ""}:${pane.tab ?? ""}`, className: "bt-panel-view" },
       (0, import_react69.createElement)(DetailsDrawer, {
@@ -45109,13 +45139,14 @@ function ReadOnlyDock({ sessionId, useSessions, useUi, useRoster, actions }) {
   const bot = useRoster((state) => state.byId?.[sessionId] ?? Object.values(state.byId ?? {}).find((entry) => entry?.sessionId === sessionId));
   const running = useRoster((state) => state.partsRunning?.[sessionId] === true);
   const inMain = useSessions ? useSessions((list) => (list.byId?.[sessionId]?.retainedBy?.mainView ?? 0) > 0) : true;
-  const active = groupWork !== void 0 || readOnlyPart !== null && readOnlyPart === sessionId && running;
+  const blocksInput = readOnlyPart !== null && readOnlyPart === sessionId && running;
+  const active = groupWork !== void 0 || blocksInput;
   const root = (0, import_react73.useRef)(null);
   (0, import_react73.useEffect)(() => {
     if (readOnlyPart !== null && readOnlyPart === sessionId && !running) actions.clearReadOnlyPart?.();
   }, [readOnlyPart, sessionId, running]);
   (0, import_react73.useEffect)(() => {
-    if (!active) return void 0;
+    if (!blocksInput) return void 0;
     const card = root.current?.closest("[data-conversation-content]")?.querySelector("[data-composer-card]") ?? root.current?.closest("[data-composer-card]") ?? document.querySelector("[data-composer-card]");
     if (card === null || card === void 0) return void 0;
     const onKey = (event) => {
@@ -45138,7 +45169,7 @@ function ReadOnlyDock({ sessionId, useSessions, useUi, useRoster, actions }) {
       card.removeEventListener("keydown", onKey, true);
       card.removeEventListener("click", onClick, true);
     };
-  }, [active]);
+  }, [blocksInput]);
   if (groupWork !== void 0) {
     return (0, import_react73.createElement)(
       "div",
@@ -45180,7 +45211,7 @@ var SCHEDULED_TASK = "scheduled-task";
 function commandEntries({ roster, actions }) {
   const entry = (sessionId) => {
     const snapshot = roster.getSnapshot();
-    return snapshot.byId?.[sessionId] ?? snapshot.roomsById?.[sessionId];
+    return snapshot.byId?.[sessionId] ?? snapshot.roomsById?.[sessionId] ?? snapshot.groupSessionOf?.[sessionId]?.bot;
   };
   const isRoom = (sessionId) => roster.getSnapshot().roomsById?.[sessionId] !== void 0;
   const isBotSurface = (sessionId) => entry(sessionId) !== void 0;
