@@ -1842,6 +1842,11 @@ var JA = {
   "Open this running session": "実行中のセッションを開く",
   "A running session keeps using model calls in the background.": "実行中のセッションはバックグラウンドでモデル呼び出しを続けます。",
   "This session is still running. Wait for it to finish, or stop it.": "このセッションはまだ実行中です。終了を待つか、停止してください。",
+  "Session": "セッション",
+  "Group sessions": "グループの作業セッション",
+  "Working session in {name}": "「{name}」での作業セッション",
+  "Back to {name}": "{name} に戻る",
+  "Open in main view": "メインビューで開く",
   "Running command": "操作を実行中",
   "Running {count} steps": "{count} ステップを実行中",
   "Ran 1 step": "1 ステップを実行しました",
@@ -4309,6 +4314,11 @@ var KO = {
   "Open this running session": "실행 중인 세션 열기",
   "A running session keeps using model calls in the background.": "실행 중인 세션은 백그라운드에서 모델 호출을 계속 사용합니다.",
   "This session is still running. Wait for it to finish, or stop it.": "이 세션은 아직 실행 중입니다. 끝날 때까지 기다리거나 중지하세요.",
+  "Session": "세션",
+  "Group sessions": "그룹 작업 세션",
+  "Working session in {name}": "‘{name}’ 작업 세션",
+  "Back to {name}": "{name}(으)로 돌아가기",
+  "Open in main view": "메인 화면에서 열기",
   "Running command": "작업 실행 중",
   "Running {count} steps": "{count}단계 실행 중",
   "Ran 1 step": "1단계 실행됨",
@@ -6777,6 +6787,11 @@ var ES = {
   "Open this running session": "Abrir esta sesión en ejecución",
   "A running session keeps using model calls in the background.": "Una sesión en ejecución sigue usando llamadas al modelo en segundo plano.",
   "This session is still running. Wait for it to finish, or stop it.": "Esta sesión sigue en ejecución. Espera a que termine o detenla.",
+  "Session": "Sesión",
+  "Group sessions": "Sesiones de grupo",
+  "Working session in {name}": "Sesión de trabajo en {name}",
+  "Back to {name}": "Volver a {name}",
+  "Open in main view": "Abrir en la vista principal",
   "Running command": "Ejecutando acción",
   "Running {count} steps": "Ejecutando {count} pasos",
   "Ran 1 step": "1 paso ejecutado",
@@ -9201,6 +9216,11 @@ var FR = {
   "Open this running session": "Ouvrir cette session en cours",
   "A running session keeps using model calls in the background.": "Une session en cours continue d’utiliser des appels au modèle en arrière-plan.",
   "This session is still running. Wait for it to finish, or stop it.": "Cette session est toujours en cours. Attendez la fin ou arrêtez-la.",
+  "Session": "Session",
+  "Group sessions": "Sessions de groupe",
+  "Working session in {name}": "Session de travail dans {name}",
+  "Back to {name}": "Retour à {name}",
+  "Open in main view": "Ouvrir dans la vue principale",
   "Running command": "Action en cours",
   "Running {count} steps": "Exécution de {count} étapes",
   "Ran 1 step": "1 étape exécutée",
@@ -11668,6 +11688,11 @@ var DE = {
   "Open this running session": "Diese laufende Sitzung öffnen",
   "A running session keeps using model calls in the background.": "Eine laufende Sitzung verbraucht weiterhin Modellaufrufe im Hintergrund.",
   "This session is still running. Wait for it to finish, or stop it.": "Diese Sitzung läuft noch. Warte, bis sie endet, oder stoppe sie.",
+  "Session": "Sitzung",
+  "Group sessions": "Gruppensitzungen",
+  "Working session in {name}": "Arbeitssitzung in {name}",
+  "Back to {name}": "Zurück zu {name}",
+  "Open in main view": "In der Hauptansicht öffnen",
   "Running command": "Aktion wird ausgeführt",
   "Running {count} steps": "{count} Schritte werden ausgeführt",
   "Ran 1 step": "1 Schritt ausgeführt",
@@ -14039,6 +14064,11 @@ var ZH = {
   "Open this running session": "打开这个正在运行的会话",
   "A running session keeps using model calls in the background.": "运行中的会话会在后台继续消耗模型调用。",
   "This session is still running. Wait for it to finish, or stop it.": "这个会话还在运行。等它结束，或先停止它。",
+  "Session": "会话",
+  "Group sessions": "群聊工作会话",
+  "Working session in {name}": "在「{name}」中的工作会话",
+  "Back to {name}": "返回 {name}",
+  "Open in main view": "在主视图打开",
   "Running command": "正在执行操作",
   "Running {count} steps": "正在执行 {count} 步操作",
   "Ran 1 step": "已执行 1 步操作",
@@ -14647,7 +14677,7 @@ function createSource(initial) {
     }
   };
 }
-var EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], sections: [], exchangeTurns: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, phone: null, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false };
+var EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], sections: [], exchangeTurns: {}, questions: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, phone: null, secretRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, groupSessionOf: {}, agentsById: {}, agentOf: {}, ready: false };
 var isMainOf = (roster, id) => id !== void 0 && (roster.mainBotIds ?? []).includes(id);
 function indexRoster(value) {
   const byId = {};
@@ -14656,8 +14686,13 @@ function indexRoster(value) {
     for (const id of [...bot.parts ?? [], ...open, bot.sessionId ?? bot.id, bot.id]) byId[id] = bot;
   }
   const roomsById = {};
+  const groupSessionOf = {};
   for (const room2 of value.rooms) {
     for (const id of [room2.id, room2.sessionId, ...room2.ownParts ?? []]) roomsById[id] = room2;
+    for (const [botId, sessionId] of Object.entries(room2.memberSessions ?? {})) {
+      const bot = byId[botId];
+      if (bot && sessionId) groupSessionOf[sessionId] = { room: room2, bot };
+    }
   }
   const agentsById = {};
   const agentOf = {};
@@ -14665,7 +14700,7 @@ function indexRoster(value) {
     agentsById[agent.id] = agent;
     for (const sessionId of agent.sessions ?? []) agentOf[sessionId] = agent.id;
   }
-  return { ...value, agents: value.agents ?? [], sections: value.sections ?? [], byId, roomsById, agentsById, agentOf, ready: true };
+  return { ...value, agents: value.agents ?? [], sections: value.sections ?? [], byId, roomsById, groupSessionOf, agentsById, agentOf, ready: true };
 }
 function isAgentSession(roster, cache, sessionId) {
   if (sessionId === void 0 || sessionId === null || sessionId === "") return false;
@@ -14689,6 +14724,13 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
   let pastes = 0;
   const pasteState = (state, sessionId, blocks) => ({ ...state, paste: { ...state.paste, [sessionId]: blocks } });
   const yieldTo = (state, view) => state.panelYield === true || panelFolded?.(view) === true;
+  const workKeyOf = (snap, id) => {
+    const room2 = snap?.roomsById?.[id];
+    if (room2) return `room:${room2.id}`;
+    const bot = snap?.byId?.[id];
+    if (bot) return `bot:${bot.id}`;
+    return null;
+  };
   const openSideChat = (sessionId, chatId) => {
     ui2.set((state) => ({ ...state, details: sessionId, view: "side", side: chatId ?? null, renaming: false, tab: null, panelYield: yieldTo(state, "side") }));
   };
@@ -14737,7 +14779,10 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       ui2.set((state) => {
         if (!state.details || state.details === id) return state;
         const snap = roster.getSnapshot();
-        const view = state.view === "browser" && snap.byId[id] === void 0 ? "details" : state.view === "side" && !(snap.sideChats?.[snap.byId[id]?.id] ?? []).some((chat) => chat?.id === state.side) ? "details" : state.view;
+        const ownerBot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot;
+        const nextKey = workKeyOf(snap, id);
+        const nextWorks = nextKey ? state.works?.[nextKey] ?? [] : [];
+        const view = state.view === "browser" && ownerBot === void 0 ? "details" : state.view === "side" && !(snap.sideChats?.[ownerBot?.id] ?? []).some((chat) => chat?.id === state.side) ? "details" : state.view === "work" && (!state.work || state.work === id || !nextWorks.includes(state.work) || snap.groupSessionOf?.[state.work] === void 0) ? "details" : state.view;
         return { ...state, details: id, view, renaming: false, tab: null };
       });
     },
@@ -14764,8 +14809,37 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       ui2.set((state) => ({ ...state, settings: { page: "connectors", id: null }, menu: null, palette: null, newChat: null }));
     },
     setPanelView: (view) => {
-      if (view !== "details" && view !== "browser" && view !== "side") return;
+      if (view !== "details" && view !== "browser" && view !== "side" && view !== "work") return;
       ui2.set((state) => state.details && state.view !== view ? { ...state, view, panelYield: yieldTo(state, view) } : state);
+    },
+    openPanelWork: (detailsId, workSessionId) => {
+      ui2.set((state) => {
+        const key = workKeyOf(roster.getSnapshot(), detailsId);
+        if (!key || !workSessionId) return state;
+        const current2 = state.works?.[key] ?? [];
+        const list = current2.includes(workSessionId) ? current2 : [...current2, workSessionId];
+        return {
+          ...state,
+          details: detailsId,
+          view: "work",
+          work: workSessionId,
+          works: { ...state.works, [key]: list },
+          renaming: false,
+          tab: null,
+          panelYield: yieldTo(state, "work")
+        };
+      });
+    },
+    closePanelWork: (detailsId, workSessionId) => {
+      ui2.set((state) => {
+        const key = workKeyOf(roster.getSnapshot(), detailsId);
+        if (!key) return state;
+        const list = (state.works?.[key] ?? []).filter((id) => id !== workSessionId);
+        const works = { ...state.works, [key]: list };
+        if (state.view !== "work" || state.work !== workSessionId) return { ...state, works };
+        const nextWork = list.at(-1) ?? null;
+        return { ...state, works, view: nextWork ? "work" : "details", work: nextWork };
+      });
     },
     // A side chat on the panel's own view, opened from the strip, the `···`
     // menus or `/side`. Closing the panel keeps the chats; only a tab's × deletes.
@@ -14785,7 +14859,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       return after(call2("side-close", { chatId }));
     },
     closePanel: () => {
-      ui2.set((state) => state.details ? { ...state, details: null, view: "details", renaming: false, tab: null, side: null } : state);
+      ui2.set((state) => state.details ? { ...state, details: null, view: "details", renaming: false, tab: null, side: null, work: null } : state);
     },
     quote: (sessionId, text) => ui2.set((state) => ({ ...state, quote: { sessionId, text, token: Date.now() } })),
     // A long paste becomes a card; its text stays here until it goes back into the box.
@@ -14970,7 +15044,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     // Hours come back in this browser's time zone, so days start at local midnight.
     usage: () => call2("usage", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     // The details panel's status line: turns, speed, cache hits and context for one Bot.
-    runStats: (botId) => call2("run-stats", { botId }),
+    runStats: (botId, sessionId) => call2("run-stats", { botId, ...sessionId ? { sessionId } : {} }),
     // `summarize` starts a summary when the entries changed; `regenerate` always does.
     memoryView: (id, flags = {}) => call2("memory-view", { ...memoryOf(id), ...flags }),
     memoryAsk: (id, text) => call2("memory-ask", { ...memoryOf(id), text }),
@@ -15870,7 +15944,7 @@ function migrateStorage(storage = globalThis.localStorage) {
 // src/client/frame-layout.js
 var MIN_CHAT = 420;
 var RAIL_WIDTH = 88;
-var PANEL_MIN = { details: 320, browser: 360, side: 320 };
+var PANEL_MIN = { details: 320, browser: 360, side: 320, work: 360 };
 var DSH_NARROW = 1024;
 var trackRoom = ({ width, right }) => Math.max(0, Math.min(width, right));
 var SIDEBAR_MIN = 264;
@@ -16116,6 +16190,11 @@ html[data-bt-collapsing] [class*="_frame"]:has(>[class*="_sidebarCol"]){transiti
 .bt-pill{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;height:40px;padding:7.5px 13.5px 7.5px 7.5px;border-radius:999px;background:var(--bt-glass-bg);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border:.5px solid var(--bt-glass-rim);box-shadow:var(--bt-glass-shadow);color:var(--bt-ink);font-family:inherit;font-size:14px;line-height:20px;cursor:pointer;max-width:70%;box-sizing:border-box;transition:background-color .12s ease,transform ${SPRING_TAP.duration}ms ${SPRING_TAP.easing}}
 .bt-pill:hover{background:color-mix(in srgb,var(--bt-main),#777 9%)}
 .bt-pill:active{transform:scale(.965)}
+.bt-head-back{pointer-events:auto;flex:none;display:inline-flex;align-items:center;gap:5px;height:40px;margin-right:8px;padding:0 13px 0 10px;border-radius:999px;background:var(--bt-glass-bg);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border:.5px solid var(--bt-glass-rim);box-shadow:var(--bt-glass-shadow);color:var(--bt-ink-2);font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer;max-width:180px;box-sizing:border-box;transition:background-color .12s ease,color .12s ease,transform ${SPRING_TAP.duration}ms ${SPRING_TAP.easing}}
+.bt-head-back:hover{background:color-mix(in srgb,var(--bt-ink) 6%,var(--bt-main));color:var(--bt-ink)}
+.bt-head-back:active{transform:scale(.965)}
+.bt-head-back svg{width:15px;height:15px;flex:none}
+.bt-head-back-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-pill-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .bt-pill-mem{flex:none;display:inline-flex;width:0;margin-left:-8px;overflow:hidden;transition:${spring(SPRING_SHAPE, "width", "margin-left")}}
 .bt-pill[data-memory=updated] .bt-pill-mem{width:var(--bt-mem-w);margin-left:0;transition:${spring(SPRING_STRETCH, "width", "margin-left")}}
@@ -28431,11 +28510,12 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
   const mentions = useFileMentions({ node, openFile, fileMentions, useTurnData });
   const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenTurn(roster, sessionId, data.turn);
   const interleaved = hasInterleavedBlocks(data);
-  const texts2 = groupPart === "reasoning" ? [] : data.blocks.filter((block) => block.kind === "text").map((block) => stripToolCallTags(block.text)).filter((text) => text.trim() !== "");
+  const texts2 = !interleaved && groupPart === "reasoning" || interleaved && groupPart === "reasoning" ? [] : data.blocks.filter((block) => block.kind === "text").map((block) => stripToolCallTags(block.text)).filter((text) => text.trim() !== "");
   const running = data.status === "running";
   const textInteractionSource = data.status === "settled" && data.finalNode?.messageId !== void 0;
   const members = steps.length ? steps : [data];
-  const shown = thinkingShown(roster.prefs);
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const shown = groupWork !== void 0 || thinkingShown(roster.prefs);
   const reasoning = interleaved || groupPart === "response" || !shown ? "" : turnReasoning(steps, data);
   const thinking = interleaved || groupPart === "response" || !shown ? void 0 : thinkingStep(members);
   const hasAnyReasoning = interleaved ? shown && data.blocks.some((block) => block.kind === "reasoning") : reasoning !== "";
@@ -28448,9 +28528,9 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
     const segments = stepSegments(data);
     const relays2 = relaysBefore(contexts, steps, data);
     if (segments.length === 0 && relays2.length === 0) return (0, import_react34.createElement)(CellEmpty);
-    const selfBot = roster.byId[sessionId];
-    const selfId2 = selfBot?.id ?? sessionId;
-    const speaker2 = layoutOf(roster.prefs) === "flat" ? selfBot : void 0;
+    const selfBot2 = roster.byId[sessionId] ?? groupWork?.bot;
+    const selfId2 = selfBot2?.id ?? sessionId;
+    const speaker2 = layoutOf(roster.prefs) === "flat" ? selfBot2 : void 0;
     const head2 = speaker2 !== void 0 && opensReply(steps, data, shown);
     const lastTextIndex = segments.findLastIndex((seg) => seg.kind === "text");
     const lastThoughtIndex = segments.findLastIndex((seg) => seg.kind === "process" && Boolean(seg.thought));
@@ -28511,8 +28591,9 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
   const relays = relayPart(data, groupPart) ? relaysBefore(contexts, steps, data) : [];
   const activity = groupPart === "response" ? [] : stepActivity(data);
   if (texts2.length === 0 && !reasoning && relays.length === 0 && activity.length === 0) return (0, import_react34.createElement)(CellEmpty);
-  const selfId = roster.byId[sessionId]?.id ?? sessionId;
-  const speaker = layoutOf(roster.prefs) === "flat" ? roster.byId[sessionId] : void 0;
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot;
+  const selfId = selfBot?.id ?? sessionId;
+  const speaker = layoutOf(roster.prefs) === "flat" ? selfBot : void 0;
   const head = speaker !== void 0 && opensReply(steps, data, shown) && (reasoning !== "" || texts2.length > 0 && !(groupPart === "response" && shown && turnReasoning(steps, data) !== ""));
   return (0, import_react34.createElement)(
     import_react34.Fragment,
@@ -28691,8 +28772,9 @@ function memoryFailure(code) {
   }
 }
 function MemoryEvent({ sessionId, scope, tool, result, failed, code, roster, actions, findBot }) {
-  const self = roster.byId[sessionId];
-  const room2 = roster.roomsById[sessionId];
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const self = roster.byId[sessionId] ?? groupWork?.bot;
+  const room2 = roster.roomsById[sessionId] ?? groupWork?.room;
   const named = String(scope ?? "").trim();
   const team = MEMORY_TEAM.test(named);
   const other = team || named === "" ? void 0 : findBot(named);
@@ -28759,8 +28841,9 @@ function EarlierParts({ sessionId, roster, actions }) {
   const load = (cursor) => {
     if (busy.current) return;
     const mine = generation.current;
+    const groupWork = roster.groupSessionOf?.[sessionId];
     const room2 = roster.roomsById[sessionId];
-    const owner = roster.byId[sessionId] ?? (room2 === void 0 ? void 0 : { parts: room2.ownParts, sessionId: room2.sessionId });
+    const owner = roster.byId[sessionId] ?? (groupWork ? { parts: groupWork.room.memberParts?.[groupWork.bot.id] ?? [], sessionId } : room2 === void 0 ? void 0 : { parts: room2.ownParts, sessionId: room2.sessionId });
     const partIndex = partIndexOf(owner, sessionId, cursor);
     busy.current = true;
     setView((current2) => ({ ...current2, loading: true, failed: false }));
@@ -28827,20 +28910,46 @@ function EarlierParts({ sessionId, roster, actions }) {
     (0, import_react34.createElement)(PartLine, { time: view.startedAt })
   );
 }
+var roomPromptText = (raw) => {
+  const lines = String(raw ?? "").split("\n");
+  const body = lines.filter((line, index) => !(index === 0 && line.startsWith("[Group chat ")) && !line.startsWith("Reply directly in this group") && !line.startsWith("When you need tools, start calling"));
+  return body.join("\n").trim();
+};
 function ChatRows({ items, sessionId, roster, actions, useUi, clock: clock4 = false, onBtwDelete }) {
-  const selfId = roster.byId[sessionId]?.id;
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot;
+  const selfId = selfBot?.id;
+  const showThink = groupWork !== void 0 || thinkingShown(roster.prefs);
   const rows2 = [];
   for (const item of items) {
+    if (item.kind === "think" && !showThink) continue;
     const last = rows2.at(-1);
     if (item.kind === "bot" && last?.kind === "bot") {
       last.texts.push(item.text);
       last.end = item.time;
-    } else rows2.push(item.kind === "bot" ? { kind: "bot", texts: [item.text], time: item.time, end: item.time } : item);
+    } else if (item.kind === "think" && last?.kind === "think" && last.turn === item.turn) {
+      last.text = `${last.text}
+
+${item.text}`;
+      if (typeof item.ms === "number") last.ms = item.ms;
+      last.end = item.time;
+    } else if (item.kind === "activity" && last?.kind === "activity" && last.turn === item.turn) {
+      last.lines.push(...item.lines ?? []);
+      last.end = item.time;
+    } else if (item.kind === "bot") {
+      rows2.push({ kind: "bot", texts: [item.text], time: item.time, end: item.time });
+    } else if (item.kind === "think") {
+      rows2.push({ ...item, end: item.time });
+    } else if (item.kind === "activity") {
+      rows2.push({ ...item, lines: [...item.lines ?? []], end: item.time });
+    } else {
+      rows2.push(item);
+    }
   }
   let before;
   return rows2.flatMap((row, index) => {
     const key = rows2.length - index;
-    const shown = chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDelete });
+    const shown = chatRow(row, key, { sessionId, selfId, selfBot, roster, actions, useUi, onBtwDelete });
     if (row.kind === "divider") {
       before = void 0;
       return [shown];
@@ -28850,12 +28959,17 @@ function ChatRows({ items, sessionId, roster, actions, useUi, clock: clock4 = fa
     return pause ? [(0, import_react34.createElement)("div", { key: `${key}:clock`, className: "bt-time-sep", role: "separator" }, clockLabel(row.time)), shown] : [shown];
   });
 }
-function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDelete }) {
+function chatRow(row, key, { sessionId, selfId, selfBot, roster, actions, useUi, onBtwDelete }) {
   switch (row.kind) {
     case "divider":
       return (0, import_react34.createElement)(PartLine, { key, time: row.time });
     case "user":
+    case "room-prompt":
       return (0, import_react34.createElement)(EarlierUser, { key, row, actions });
+    case "activity":
+      return row.lines?.length ? (0, import_react34.createElement)(ActivityFold, { key, lines: row.lines, live: false, viewKey: `${sessionId}:earlier-act:${row.seq ?? key}` }) : null;
+    case "think":
+      return (0, import_react34.createElement)(ThinkingRow, { key, text: row.text, live: false, ms: row.ms, viewKey: `${sessionId}:earlier:${row.seq ?? key}`, textInteractionSource: true });
     case "answer":
       return (0, import_react34.createElement)(AnsweredReply, { key, node: { data: row } });
     // A question or view card closed without an answer on it.
@@ -28866,7 +28980,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
       return (0, import_react34.createElement)(WidgetCell, { key, sessionId, callId: row.callId, args: { text: (name) => name === "title" ? row.title : void 0, value: (name) => name === "view" ? row.view : void 0 }, done: true, isError: false, roster, actions });
     case "bot": {
       const bubbles = (0, import_react34.createElement)(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : void 0, msgKey: useUi ? `${sessionId}:${row.time}` : void 0, useUi, fold: FOLD_HUGE, textInteractionSource: true });
-      const speaker = layoutOf(roster.prefs) === "flat" ? roster.byId[selfId] : void 0;
+      const speaker = layoutOf(roster.prefs) === "flat" ? roster.byId[selfId] ?? selfBot : void 0;
       return speaker ? (0, import_react34.createElement)(import_react34.Fragment, { key }, (0, import_react34.createElement)(SpeakerHead, { bot: speaker, time: row.time }), bubbles) : bubbles;
     }
     case "btw":
@@ -28911,7 +29025,8 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
   const roster = useRoster((value) => value);
   const data = node.data;
   const source = data.source !== null && typeof data.source === "object" ? data.source : {};
-  const selfId = roster.byId[sessionId]?.id ?? sessionId;
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const selfId = (roster.byId[sessionId] ?? groupWork?.bot)?.id ?? sessionId;
   const deferred = source.kind === "bot" && source.deferred === true;
   const relayed = isRelayContext(data);
   const turn = node.location?.turn?.turn ?? data.turn;
@@ -28938,6 +29053,10 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
   function triggerBody() {
     if (source.kind === "bot") {
       if (source.handoff === true) return (0, import_react34.createElement)(EarlierParts, { sessionId, roster, actions });
+      if (groupWork !== void 0 && source.role === "room" && !deferred) {
+        const excerpt = roomPromptText(contentText(data.content));
+        return excerpt === "" ? null : (0, import_react34.createElement)(EarlierUser, { row: { text: excerpt, time: data.time }, actions });
+      }
       if (source.role === "kickoff" || source.role === "room" || source.role === "goal") return null;
       if (source.role === "secret" || deferred) return null;
       if (source.role === "update") return (0, import_react34.createElement)("div", { className: "bt-event" }, t("Profile updated"));
@@ -29389,7 +29508,7 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
   const tool = toolName(call2);
   const done = call2.kind === "tool-result";
   const { text: arg, value: argValue } = toolArgs(call2);
-  const self = roster.byId[sessionId];
+  const self = roster.byId[sessionId] ?? roster.groupSessionOf?.[sessionId]?.bot;
   switch (tool) {
     case "message_bot": {
       const target = findBot(arg("to")) ?? { name: arg("to") ?? "…", color: "gray" };
@@ -29477,23 +29596,42 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
       return (0, import_react34.createElement)(CellEmpty);
   }
 }
+function describeToolCall(call2) {
+  const name = String(toolName(call2) ?? "");
+  const { text: arg } = toolArgs(call2);
+  const cmd = [arg("command"), arg("cmd")].find((value) => typeof value === "string" && value.trim() !== "");
+  if (cmd) return `${name} \`${cmd.trim().slice(0, 140)}\``;
+  const target = [arg("file_path"), arg("path"), arg("pattern"), arg("query"), arg("url"), arg("description")].find((value) => typeof value === "string" && value.trim() !== "");
+  return target ? `${name} \`${target.trim().slice(0, 140)}\`` : name;
+}
 function ToolCell({ node, sessionId, useRoster, useUi, useWork, useHeldCards, useBrowserHolds, useBrowserTabs, useBrowserPages, useComputer, actions }) {
   const roster = useRoster((value) => value);
   const heldCards = useHeldCards?.((state) => state[sessionId]);
   const root = node.data.root;
   const turn = node.location?.turn?.turn ?? root.turn;
   const hidden = isHiddenTurn(roster, sessionId, turn);
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot;
   const findBot = (nameOrId) => roster.byId[nameOrId] ?? roster.bots.find((bot) => bot.name.toLowerCase() === String(nameOrId ?? "").toLowerCase());
   const closed = roster.closedCards?.[sessionId];
   const calls = hidden ? callTree(root).filter((call2) => (toolName(call2) === "ask_user" || toolName(call2) === "show_view") && call2.callId && closed?.[call2.callId] !== void 0) : callTree(root);
   const drawn = calls.filter((call2) => DRAWN.has(toolName(call2)) || isComputerCall(toolName(call2)));
+  const workLines = groupWork !== void 0 && !hidden ? calls.filter((call2) => {
+    const name = toolName(call2);
+    return Boolean(name) && name !== "run_code" && !DRAWN.has(name) && !isComputerCall(name);
+  }).map(describeToolCall) : [];
   const running = root.kind === "tool-result" ? void 0 : calls.findLast((call2) => call2.kind !== "tool-result");
-  const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, roster.byId[sessionId]) : null;
+  const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, selfBot) : null;
   useLiveNote(actions, sessionId, `tool:${root.callId ?? node.key}`, note);
   useShownCards(actions, sessionId, drawn.filter((call2) => (CARDS.has(toolName(call2)) || isComputerCall(toolName(call2))) && call2.callId).map((call2) => call2.callId));
-  if (drawn.length === 0) return (0, import_react34.createElement)(CellEmpty);
+  if (drawn.length === 0 && workLines.length === 0) return (0, import_react34.createElement)(CellEmpty);
   const env = { sessionId, roster, actions, useUi, useWork, findBot, heldCards, hooks: { useBrowserHolds, useBrowserTabs, useBrowserPages, useComputer } };
-  return (0, import_react34.createElement)(import_react34.Fragment, null, drawn.map((call2, index) => (0, import_react34.createElement)(import_react34.Fragment, { key: call2.callId ?? index }, renderCall(call2, env))));
+  return (0, import_react34.createElement)(
+    import_react34.Fragment,
+    null,
+    workLines.length > 0 ? (0, import_react34.createElement)(ActivityFold, { lines: workLines, live: running !== void 0, viewKey: `${sessionId}:tool-act:${root.callId ?? node.key}` }) : null,
+    drawn.map((call2, index) => (0, import_react34.createElement)(import_react34.Fragment, { key: call2.callId ?? index }, renderCall(call2, env)))
+  );
 }
 
 // src/client/activity-row.js
@@ -38216,9 +38354,10 @@ function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus, useSe
     return () => document.body.style.removeProperty("--bt-first-sep");
   }, [opening]);
   const running = useSessionStatus((map) => map.get(sessionId)?.running === true);
-  const owner = roster.byId[sessionId]?.id ?? sessionId;
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const bot = roster.byId[sessionId] ?? groupWork?.bot;
+  const owner = bot?.id ?? sessionId;
   const doing = useActivity((map) => map[owner]);
-  const bot = roster.byId[sessionId];
   const room2 = roster.roomsById[sessionId];
   const goal = room2?.goal;
   const goalCompose = useUi((state) => room2 !== void 0 && state.goalCompose === room2.id);
@@ -38228,7 +38367,7 @@ function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus, useSe
   const view = goal ? goalView(goal, { roster, roomWork }) : null;
   const goalShown = room2 !== void 0 && !away && goal !== void 0;
   const detailsOpen = useUi((state) => state.details === sessionId);
-  const name = bot?.name ?? room2?.name ?? "";
+  const name = groupWork ? `${groupWork.bot.name} · ${groupWork.room.name}` : bot?.name ?? room2?.name ?? "";
   const useNews = useMemoryNews ?? noNews;
   const memoryIds = bot ? [bot.id] : room2 ? [room2.id, ...room2.members] : [];
   const notice = useMemoryNotice(memoryIds, useNews);
@@ -38276,7 +38415,7 @@ function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus, useSe
       { className: "bt-pill-swap" },
       (0, import_react54.createElement)("span", { className: "bt-pill-goal" }, (0, import_react54.createElement)("span", { className: "bt-pill-ico", "aria-hidden": true }, (0, import_react54.createElement)(GoalIcon)), (0, import_react54.createElement)("span", { className: "bt-pill-title" }, view.title)),
       (0, import_react54.createElement)("span", { className: "bt-pill-name" }, name)
-    ) : (0, import_react54.createElement)("span", { className: "bt-pill-name" }, away ? t("Back to chat") : bot?.name ?? room2?.name ?? (title || t("New chat")), !away && bot?.engine ? (0, import_react54.createElement)(AgentBadge, { engine: bot.engine }) : null),
+    ) : (0, import_react54.createElement)("span", { className: "bt-pill-name" }, away ? t("Back to chat") : name || title || t("New chat"), !away && bot?.engine ? (0, import_react54.createElement)(AgentBadge, { engine: bot.engine }) : null),
     goalShown && view?.number !== void 0 ? (0, import_react54.createElement)("span", { className: "bt-pill-count" }, `${view.number}/${view.count}`) : null,
     (0, import_react54.createElement)(MemoryNotice, { shown: memoryNotice }),
     (0, import_react54.createElement)("span", { className: "bt-pill-go", "aria-hidden": true }, (0, import_react54.createElement)(GoArrow))
@@ -38284,6 +38423,13 @@ function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus, useSe
   return (0, import_react54.createElement)(
     "div",
     { className: "bt-head" },
+    groupWork !== void 0 && !away ? (0, import_react54.createElement)("button", {
+      type: "button",
+      className: "bt-head-back",
+      "aria-label": t("Back to {name}", { name: groupWork.room.name }),
+      title: t("Back to {name}", { name: groupWork.room.name }),
+      onClick: () => actions.openSession?.(groupWork.room.id)
+    }, (0, import_react54.createElement)(ChevronLeftIcon), (0, import_react54.createElement)("span", { className: "bt-head-back-name" }, groupWork.room.name)) : null,
     showGoal ? (0, import_react54.createElement)(GoalIsland, { room: room2, goal, view, open: goalOpen, composing: goalCompose, roomWork, roster, actions, pill }) : pill,
     (0, import_react54.createElement)("span", { className: "bt-sr", role: "status" }, memoryNotice ? t("Memory updated") : ""),
     room2 !== void 0 && !away ? (0, import_react54.createElement)("button", {
@@ -38887,15 +39033,15 @@ async function submitSide({ call: call2, roster, sessionId, args, attachments, o
   open?.(value?.chatId);
   return { kind: "success" };
 }
-var panelHasStrip = (canBrowse, tabCount, sideCount) => canBrowse === true && tabCount > 0 || sideCount > 0;
-function stripMenuKeys({ canBrowse, canTerminal, canFiles }) {
+var panelHasStrip = (canBrowse, tabCount, sideCount, workCount = 0) => canBrowse === true && tabCount > 0 || sideCount > 0 || workCount > 0;
+function stripMenuKeys({ canBrowse, canSide = true, canTerminal, canFiles }) {
   const keys = [];
   if (canBrowse === true) keys.push("new-tab");
-  keys.push("side");
+  if (canSide === true) keys.push("side");
   const tail = [];
   if (canTerminal === true) tail.push("terminal");
   if (canFiles === true) tail.push("files");
-  if (tail.length > 0) keys.push("sep");
+  if (keys.length > 0 && tail.length > 0) keys.push("sep");
   return [...keys, ...tail];
 }
 function drawerMenuKeys({ bot, room: room2, canBrowse, canTerminal, canFiles }) {
@@ -41638,6 +41784,9 @@ body[data-ds-dark-theme] .bt-member-state.bt-mw-ask{color:#f0b84a}
 .bt-member-stop:hover{background:var(--bt-active);color:var(--bt-ink)}
 .bt-member-stop:active:not(:disabled){scale:.94}
 .bt-member-stop:disabled{opacity:.5;cursor:default}
+.bt-member-go{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:none;color:var(--bt-ink-3);cursor:pointer;transition:background-color .12s ease,color .12s ease,${spring(SPRING_TAP, "scale")}}
+.bt-member-go:hover{background:var(--bt-active);color:var(--bt-ink)}
+.bt-member-go:active{scale:.94}
 .bt-member-cards{display:flex;flex-direction:column;gap:6px;padding:2px 8px 8px 50px}
 .bt-mw-card{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:var(--bt-hover);font-size:12px;line-height:17px;color:var(--bt-ink-2);animation:bt-rise .2s ease-out backwards}
 .bt-mw-tool{font-weight:600;color:var(--bt-ink)}
@@ -41842,13 +41991,13 @@ function PermissionRow({ bot, roster, actions, run: run2 }) {
     (0, import_react68.createElement)(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === void 0, onPick: (permission) => run2(actions.updateBot(bot.id, { permission })) })
   );
 }
-function RunStats({ bot, part, running, actions }) {
+function RunStats({ bot, part, sessionId, running, actions }) {
   const scope = `${bot.id}:${part ?? ""}`;
   const [read, setRead] = (0, import_react68.useState)(null);
   (0, import_react68.useEffect)(() => {
     if (!actions.runStats) return void 0;
     let current2 = true;
-    actions.runStats(bot.id).then(
+    actions.runStats(bot.id, sessionId).then(
       (values) => {
         if (current2) setRead({ scope, values });
       },
@@ -41859,7 +42008,7 @@ function RunStats({ bot, part, running, actions }) {
     return () => {
       current2 = false;
     };
-  }, [scope, bot.id, running, actions]);
+  }, [scope, bot.id, sessionId, running, actions]);
   const shown = runStatsOf(read?.scope === scope ? read.values : null);
   if (shown.length === 0) return null;
   return (0, import_react68.createElement)(
@@ -41996,6 +42145,7 @@ function MemberPile({ room: room2, roster }) {
 }
 var markOf = (entry) => entry?.state === "ask" ? "alert" : entry?.state === "work" ? workState(entry.doing) : "idle";
 function MemberRow({ member, entry, room: room2, roster, actions }) {
+  const workSessionId = room2.memberSessions?.[member.id];
   return (0, import_react68.createElement)(
     "div",
     { role: "listitem", className: "bt-member" },
@@ -42018,6 +42168,7 @@ function MemberRow({ member, entry, room: room2, roster, actions }) {
           (0, import_react68.createElement)(MemberState, { entry, bot: member, room: room2, roster })
         )
       ),
+      workSessionId && actions.openGroupWork ? (0, import_react68.createElement)("button", { type: "button", className: "bt-member-go", "aria-label": `${t("Session")} · ${member.name}`, title: t("Working session in {name}", { name: room2.name }), onClick: () => actions.openGroupWork(room2.id, member.id) }, (0, import_react68.createElement)(TerminalIcon)) : null,
       (0, import_react68.createElement)(StopMemberWork, { entry, bot: member, room: room2, actions })
     ),
     (0, import_react68.createElement)(MemberApprovals, { entry, bot: member, actions })
@@ -42096,66 +42247,99 @@ function GroupOverview({ room: room2, roster, actions, usage, useWork, openSetti
     ) : null
   ];
 }
-function BotSessions({ bot, part, run: run2, useSessions, actions, running }) {
+function BotSessions({ bot, part, roster, run: run2, useSessions, actions, running }) {
   const runningOf = (id) => running?.[id] === true;
+  const ownPart = currentPart(bot);
   const open = (bot.openParts ?? []).map((entry) => ({ id: entry.sessionId, open: true, running: runningOf(entry.sessionId) }));
   const backgroundRunning = open.some((entry) => entry.running);
   const entries2 = [
-    { id: part, current: true, running: runningOf(part) },
-    ...open,
-    ...(bot.parts ?? []).filter((id) => id !== part).slice().reverse().map((id) => ({ id, earlier: true }))
+    { id: ownPart, current: part === ownPart, own: true, running: runningOf(ownPart) },
+    ...open.map((entry) => ({ ...entry, current: part === entry.id })),
+    ...(bot.parts ?? []).filter((id) => id !== ownPart).slice().reverse().map((id) => ({ id, earlier: true, current: part === id }))
   ];
+  const groupEntries2 = (roster?.rooms ?? []).filter((room2) => room2.memberSessions?.[bot.id]).map((room2) => {
+    const id = room2.memberSessions[bot.id];
+    return { id, room: room2, current: part === id, running: runningOf(id) };
+  });
   const rows2 = useSessions((list) => entries2.map((entry) => list.byId?.[entry.id]), rowsEqual);
   const total = entries2.length;
   const openPart = (entry) => {
     if (entry.current) return void 0;
+    if (entry.own) return () => actions.openSession?.(bot.id);
     if (entry.open && actions.openPart !== void 0) return () => run2(actions.openPart(bot.id, entry.id, entry.running));
     return () => run2(call("bot-open-part", { botId: bot.id, sessionId: entry.id }));
   };
   return (0, import_react68.createElement)(
-    "div",
-    { className: "bt-drawer-model" },
+    import_react68.Fragment,
+    null,
     (0, import_react68.createElement)(
       "div",
-      { className: "bt-agent-sessions-head" },
-      (0, import_react68.createElement)("div", { className: "bt-section-title" }, t("Sessions")),
-      (0, import_react68.createElement)("button", { type: "button", className: "bt-agent-sessions-new", onClick: () => run2(actions.newPart !== void 0 ? actions.newPart(bot.id) : call("bot-new-part", { botId: bot.id })) }, (0, import_react68.createElement)(PlusIcon), t("New session"))
+      { className: "bt-drawer-model" },
+      (0, import_react68.createElement)(
+        "div",
+        { className: "bt-agent-sessions-head" },
+        (0, import_react68.createElement)("div", { className: "bt-section-title" }, t("Sessions")),
+        (0, import_react68.createElement)("button", { type: "button", className: "bt-agent-sessions-new", onClick: () => run2(actions.newPart !== void 0 ? actions.newPart(bot.id) : call("bot-new-part", { botId: bot.id })) }, (0, import_react68.createElement)(PlusIcon), t("New session"))
+      ),
+      backgroundRunning ? (0, import_react68.createElement)(
+        "div",
+        { className: "bt-agent-sessions-warn", role: "status" },
+        (0, import_react68.createElement)(AlertIcon),
+        (0, import_react68.createElement)("span", null, t("A running session keeps using model calls in the background."))
+      ) : null,
+      (0, import_react68.createElement)("div", { className: "bt-agent-sessions" }, entries2.map((entry, index) => {
+        const row = rows2[index];
+        const when3 = row?.updatedAt ?? row?.createdAt;
+        const label = row?.title && row.title.trim() !== "" ? row.title : t("Session {number}", { number: total - index });
+        const title = entry.current ? t("Current session") : entry.open && entry.running ? t("Open this running session") : entry.open || entry.own ? t("Open this session") : t("Open this earlier session");
+        return (0, import_react68.createElement)(
+          "button",
+          {
+            key: entry.id,
+            type: "button",
+            disabled: entry.current,
+            className: `bt-agent-session${entry.current ? " is-current" : ""}${entry.running ? " is-running" : ""}`,
+            title,
+            onClick: openPart(entry)
+          },
+          (0, import_react68.createElement)("span", { className: "bt-agent-session-name" }, label),
+          (0, import_react68.createElement)(
+            "span",
+            { className: "bt-agent-session-meta" },
+            entry.running ? (0, import_react68.createElement)("span", { className: "bt-agent-session-run", role: "status" }, t("Running")) : entry.current ? t("Current") : when3 ? new Date(when3).toLocaleString(void 0, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""
+          )
+        );
+      }))
     ),
-    backgroundRunning ? (0, import_react68.createElement)(
+    groupEntries2.length > 0 ? (0, import_react68.createElement)(
       "div",
-      { className: "bt-agent-sessions-warn", role: "status" },
-      (0, import_react68.createElement)(AlertIcon),
-      (0, import_react68.createElement)("span", null, t("A running session keeps using model calls in the background."))
-    ) : null,
-    (0, import_react68.createElement)("div", { className: "bt-agent-sessions" }, entries2.map((entry, index) => {
-      const row = rows2[index];
-      const when3 = row?.updatedAt ?? row?.createdAt;
-      const label = row?.title && row.title.trim() !== "" ? row.title : t("Session {number}", { number: total - index });
-      const title = entry.current ? t("Current session") : entry.open && entry.running ? t("Open this running session") : entry.open ? t("Open this session") : t("Open this earlier session");
-      return (0, import_react68.createElement)(
+      { className: "bt-drawer-model" },
+      (0, import_react68.createElement)("div", { className: "bt-section-title" }, t("Group sessions")),
+      (0, import_react68.createElement)("div", { className: "bt-agent-sessions" }, groupEntries2.map((entry) => (0, import_react68.createElement)(
         "button",
         {
           key: entry.id,
           type: "button",
           disabled: entry.current,
           className: `bt-agent-session${entry.current ? " is-current" : ""}${entry.running ? " is-running" : ""}`,
-          title,
-          onClick: openPart(entry)
+          title: entry.current ? t("Current session") : t("Open this session"),
+          onClick: entry.current ? void 0 : () => actions.openGroupWork?.(entry.room.id, bot.id)
         },
-        (0, import_react68.createElement)("span", { className: "bt-agent-session-name" }, label),
+        (0, import_react68.createElement)("span", { className: "bt-agent-session-name" }, entry.room.name),
         (0, import_react68.createElement)(
           "span",
           { className: "bt-agent-session-meta" },
-          entry.running ? (0, import_react68.createElement)("span", { className: "bt-agent-session-run", role: "status" }, t("Running")) : entry.current ? t("Current") : when3 ? new Date(when3).toLocaleString(void 0, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""
+          entry.running ? (0, import_react68.createElement)("span", { className: "bt-agent-session-run", role: "status" }, t("Running")) : entry.current ? t("Current") : ""
         )
-      );
-    }))
+      )))
+    ) : null
   );
 }
 var rowsEqual = (a, b) => a.length === b.length && a.every((row, index) => row?.title === b[index]?.title && row?.updatedAt === b[index]?.updatedAt);
 function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useComputer }) {
-  const owner = roster.byId[sessionId];
-  const part = owner ? currentPart(owner) : sessionId;
+  const groupWork = roster.groupSessionOf?.[sessionId];
+  const owner = roster.byId[sessionId] ?? groupWork?.bot;
+  const part = groupWork ? sessionId : owner ? currentPart(owner) : sessionId;
   const isMainBot = isMainOf(roster, owner?.id);
   const [tab, setTab] = (0, import_react68.useState)("details");
   const room2 = roster.roomsById[sessionId];
@@ -42279,7 +42463,7 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
       room2 && tab === "details" ? (0, import_react68.createElement)(GroupOverview, { room: room2, roster, actions, usage, useWork, openSettings: () => setView("settings") }) : null,
       bot && tab === "computer" ? (0, import_react68.createElement)(ComputerView, { bot, actions, hooks: { useComputer } }) : null,
       bot && tab === "details" ? [
-        (0, import_react68.createElement)(RunStats, { key: "stats", bot, part, running, actions }),
+        (0, import_react68.createElement)(RunStats, { key: "stats", bot, part, sessionId: groupWork ? part : void 0, running, actions }),
         (0, import_react68.createElement)(
           "div",
           { key: "model", className: "bt-drawer-model" },
@@ -42287,7 +42471,7 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
           (0, import_react68.createElement)(ModelMenu, { bot, roster, actions, run: run2, wide: true, inline: true }),
           modelOf(bot, roster) ? null : (0, import_react68.createElement)("div", { className: "bt-note" }, t("Pick a model and {name} can start.", { name: bot.name }))
         ),
-        (0, import_react68.createElement)(BotSessions, { key: "sessions", bot, part, run: run2, useSessions, actions, running: roster.partsRunning }),
+        (0, import_react68.createElement)(BotSessions, { key: "sessions", bot, part, roster, run: run2, useSessions, actions, running: roster.partsRunning }),
         (0, import_react68.createElement)(PermissionRow, { key: "permission", bot, roster, actions, run: run2 }),
         (0, import_react68.createElement)(BotConnectors, { key: "connectors", bot, roster, actions, run: run2 }),
         (0, import_react68.createElement)(
@@ -42329,7 +42513,6 @@ var PANEL_LINGER_MS = 300;
 var WIDTH_KEY = STORAGE.browserWidth;
 var DEFAULT_WIDTH = 520;
 var DETAILS_WIDTH = 320;
-var DETAILS_MAX = 520;
 var MIN_WIDTH = 360;
 var READ_FLASH_MS = 2400;
 var EMPTY_PAGE = { url: "", title: "", favicon: null, loading: false, canGoBack: false, canGoForward: false, error: null, excerpt: "" };
@@ -42352,6 +42535,7 @@ var LockIcon2 = icon(["M6.5 9V7a3.5 3.5 0 0 1 7 0v2", "M5.5 9h9v7h-9z"]);
 var ImportIcon = icon(["M10 3.5v8.5", "M6 8.5l4 4 4-4", "M4.5 14v1.5a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5V14"]);
 var FileIcon = icon(["M6 3.5h5.5L14.5 6.5v10H6z", "M11 3.5v3.5h3.5"]);
 var WindowIcon = icon(["M4 5h12v9.5H4z", "M4 7.5h12"]);
+var ExpandIcon = icon(["M11.5 4.5h4v4", "M15.5 4.5L9.5 10.5", "M13.5 11.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"]);
 function Favicon({ src, className }) {
   const [failed, setFailed] = (0, import_react69.useState)(null);
   if (!src || failed === src) return (0, import_react69.createElement)("span", { className: `${className} bt-ptab-globe` }, (0, import_react69.createElement)(GlobeIcon2));
@@ -42365,7 +42549,7 @@ var savedWidth = () => {
     return null;
   }
 };
-var widthRange = (view, room2) => view === "browser" ? [MIN_WIDTH, room2 - MIN_CHAT] : [DETAILS_WIDTH, Math.min(DETAILS_MAX, room2 - MIN_CHAT)];
+var widthRange = (hasStrip, room2) => [hasStrip ? MIN_WIDTH : DETAILS_WIDTH, room2 - MIN_CHAT];
 var fitWidth = (width, [low, high]) => Math.round(Math.max(low, Math.min(width, high)));
 var shortAddress = (url) => String(url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
 var tabLabel = (page) => page.title || shortAddress(page.url) || t("New tab");
@@ -42442,7 +42626,7 @@ function menuItemFor(key, actions, subject) {
   }
 }
 var sideTitle = (chat) => chat?.entries?.[0]?.question?.trim() || t("Side chat");
-function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, reading, onView, actions, useBrowserPages }) {
+function PanelStrip({ bot, subjectRoom, roster, subject, view, ids, active, sides, side, works = [], work, activeWorkInfo, canBrowse, canSide = true, reading, onView, actions, useBrowserPages }) {
   const pages = useBrowserPages((map) => map);
   const wrap = (0, import_react69.useRef)(null);
   const ind = (0, import_react69.useRef)(null);
@@ -42453,7 +42637,7 @@ function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, r
     const box = wrap.current;
     const capsule = ind.current;
     if (!box || !capsule) return void 0;
-    const node = view === "details" ? box.querySelector(".bt-ptab-bot") : view === "side" ? box.querySelector(`[data-side="${side}"]`) : box.querySelector(`[data-tab="${active}"]`);
+    const node = view === "details" ? box.querySelector(".bt-ptab-bot") : view === "work" ? box.querySelector(`[data-work="${work}"]`) : view === "side" ? box.querySelector(`[data-side="${side}"]`) : box.querySelector(`[data-tab="${active}"]`);
     if (under.current !== node) {
       if (under.current) watcher.current?.unobserve(under.current);
       under.current = node;
@@ -42501,11 +42685,14 @@ function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, r
       observer.disconnect();
     };
   }, []);
+  const menuSubject = view === "work" && work ? work : subject;
   const items = stripMenuKeys({
     canBrowse,
+    canSide,
     canTerminal: actions.canOpenTerminal?.() === true,
     canFiles: actions.canOpenFiles?.() === true
-  }).map((key) => menuItemFor(key, actions, subject));
+  }).map((key) => menuItemFor(key, actions, menuSubject));
+  const homeTitle = subjectRoom ? subjectRoom.name : bot?.name;
   return (0, import_react69.createElement)(
     "div",
     { className: "bt-ptabs", role: "tablist", "aria-label": t("Panel tabs") },
@@ -42519,12 +42706,49 @@ function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, r
           role: "tab",
           "aria-selected": view === "details",
           className: "bt-ptab bt-ptab-bot",
-          title: bot.name,
+          title: homeTitle,
           onClick: () => onView("details")
         },
-        (0, import_react69.createElement)(BotMark, { bot, size: 20, state: reading ? "searching" : "idle" }),
-        view === "details" ? (0, import_react69.createElement)("span", { className: "bt-ptab-name" }, bot.name) : null
+        subjectRoom ? (0, import_react69.createElement)(RoomAvatar, { room: subjectRoom, roster, size: 20 }) : (0, import_react69.createElement)(BotMark, { bot, size: 20, state: reading ? "searching" : "idle" }),
+        view === "details" ? (0, import_react69.createElement)("span", { className: "bt-ptab-name" }, homeTitle) : null
       ),
+      works.map((workId) => {
+        const info = roster.groupSessionOf?.[workId];
+        if (!info) return null;
+        const on = view === "work" && workId === work;
+        const label = subjectRoom ? info.bot.name : info.room.name;
+        return (0, import_react69.createElement)(
+          "button",
+          {
+            key: workId,
+            type: "button",
+            role: "tab",
+            "aria-selected": on,
+            "data-work": workId,
+            className: "bt-ptab bt-ptab-work",
+            title: t("Working session in {name}", { name: info.room.name }),
+            onClick: () => actions.openPanelWork(subject, workId),
+            onAuxClick: (event) => {
+              if (event.button === 1) {
+                event.preventDefault();
+                actions.closePanelWork(subject, workId);
+              }
+            }
+          },
+          subjectRoom ? (0, import_react69.createElement)(BotMark, { bot: info.bot, size: 18, state: roster.partsRunning?.[workId] ? "working" : "idle" }) : (0, import_react69.createElement)(RoomAvatar, { room: info.room, roster, size: 18 }),
+          (0, import_react69.createElement)("span", { className: "bt-ptab-title" }, label),
+          (0, import_react69.createElement)("span", {
+            className: "bt-ptab-x",
+            role: "button",
+            "aria-label": t("Close tab"),
+            title: t("Close tab"),
+            onClick: (event) => {
+              event.stopPropagation();
+              actions.closePanelWork(subject, workId);
+            }
+          }, "×")
+        );
+      }),
       ids.map((tabId) => {
         const page = pages[tabId] ?? EMPTY_PAGE;
         const on = view === "browser" && tabId === active;
@@ -42599,9 +42823,58 @@ function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, r
       }),
       (0, import_react69.createElement)("span", { ref: ind, className: "bt-ptab-ind", "aria-hidden": true })
     ),
+    view === "work" && activeWorkInfo && actions.openGroupWorkMain ? (0, import_react69.createElement)("button", {
+      type: "button",
+      className: "bt-icon-btn bt-ptab-expand",
+      "aria-label": t("Open in main view"),
+      title: t("Open in main view"),
+      onClick: () => actions.openGroupWorkMain(activeWorkInfo.room.id, activeWorkInfo.bot.id)
+    }, (0, import_react69.createElement)(ExpandIcon)) : null,
     // The `···` and Close stay outside the scrolling tabs, so a narrow panel keeps both.
     (0, import_react69.createElement)(PanelMenu, { items, className: "bt-ptab-new", "aria-label": t("More") }),
     (0, import_react69.createElement)("button", { type: "button", className: "bt-icon-btn bt-ptab-close", "aria-label": t("Close panel"), title: t("Close panel"), onClick: () => actions.closePanel() }, (0, import_react69.createElement)(CloseIcon3))
+  );
+}
+function WorkSessionView({ workSessionId, info, useSessions, SessionProvider, renderSlot, actions }) {
+  const listed = useSessions ? useSessions((state) => state.byId?.[workSessionId] !== void 0) : false;
+  const [reference, setReference] = (0, import_react69.useState)(null);
+  (0, import_react69.useEffect)(() => {
+    if (listed) return void 0;
+    void actions.refreshSessions?.();
+    const timer = setInterval(() => {
+      void actions.refreshSessions?.();
+    }, 600);
+    return () => clearInterval(timer);
+  }, [workSessionId, listed]);
+  (0, import_react69.useEffect)(() => {
+    if (!listed || typeof actions.retainSession !== "function") {
+      setReference(null);
+      return void 0;
+    }
+    const controller = new AbortController();
+    let ref = null;
+    try {
+      ref = actions.retainSession(workSessionId, controller.signal);
+      setReference(ref);
+    } catch (error) {
+      setReference(null);
+      actions.reportError?.(error, "work-panel");
+    }
+    return () => {
+      controller.abort();
+      setReference(null);
+      ref?.release();
+    };
+  }, [workSessionId, listed]);
+  const placeholder = JSON.stringify(t("Message {name}", { name: info.bot.name }));
+  return (0, import_react69.createElement)(
+    "div",
+    {
+      className: "bt-panel-view bt-panel-work",
+      "aria-label": `${info.bot.name} · ${info.room.name}`,
+      style: { "--bt-placeholder": placeholder, "--bt-first-sep": "none" }
+    },
+    reference && SessionProvider && renderSlot ? (0, import_react69.createElement)(SessionProvider, { key: workSessionId, session: reference }, renderSlot("ds-bot.panel.conversation", {})) : (0, import_react69.createElement)("div", { className: "bt-work-loading" }, (0, import_react69.createElement)("span", { className: "bt-shimmer" }, t("Loading…")))
   );
 }
 function BrowserView({ bot, tabId, leaving, landed, actions, useBrowserPages, hold }) {
@@ -42972,12 +43245,17 @@ function ImportCard({ flow, page, busy, onApply, onCancel, onCloseAndImport, onD
     )
   ));
 }
-function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer }) {
-  const bot = roster.byId[pane.id];
+function BotPanel({ pane, current: current2, leaving, room: room2, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, SessionProvider, renderSlot }) {
+  const subjectRoom = roster.roomsById?.[pane.id];
+  const bot = roster.byId[pane.id] ?? roster.groupSessionOf?.[pane.id]?.bot;
+  const ownerKey = subjectRoom ? `room:${subjectRoom.id}` : bot ? `bot:${bot.id}` : null;
+  const workIds = (ownerKey ? pane.works?.[ownerKey] ?? [] : []).filter((id) => id !== current2 && roster.groupSessionOf?.[id] !== void 0);
+  const activeWork = workIds.includes(pane.work) ? pane.work : null;
+  const activeWorkInfo = activeWork ? roster.groupSessionOf[activeWork] : void 0;
   const canBrowse = Boolean(bot && roster.browser === true && actions.browserShow);
   const sideChats = bot ? sideChatsOf(roster, bot.id) : [];
   const sideChat = sideChats.find((chat) => chat?.id === pane.side);
-  const view = pane.view === "browser" && canBrowse ? "browser" : pane.view === "side" && sideChat !== void 0 ? "side" : "details";
+  const view = pane.view === "browser" && canBrowse ? "browser" : pane.view === "side" && sideChat !== void 0 ? "side" : pane.view === "work" && activeWork !== null ? "work" : "details";
   const tabState = useBrowserTabs((map) => bot ? map[bot.id] ?? EMPTY_TABS2 : EMPTY_TABS2);
   const active = tabState.active;
   const page = useBrowserPages((pages) => (active ? pages[active] : null) ?? EMPTY_PAGE);
@@ -42992,10 +43270,8 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
   const [resizing, setResizing] = (0, import_react69.useState)(false);
   const instant = dragging || resizing;
   const [reading, setReading] = (0, import_react69.useState)(false);
-  const panelWidth = fitWidth(width ?? (view === "browser" ? DEFAULT_WIDTH : DETAILS_WIDTH), widthRange(view, room2));
-  (0, import_react69.useLayoutEffect)(() => {
-    if (view === "browser" && width === null) setWidth(DEFAULT_WIDTH);
-  }, [view, width]);
+  const hasStrip = panelHasStrip(canBrowse, tabState.ids.length, sideChats.length, workIds.length);
+  const panelWidth = fitWidth(width ?? (hasStrip ? DEFAULT_WIDTH : DETAILS_WIDTH), widthRange(hasStrip, room2));
   (0, import_react69.useLayoutEffect)(() => {
     chatRoom.hold(instant);
   }, [instant]);
@@ -43045,6 +43321,9 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
     if (pane.view === "side" && sideChat === void 0) actions.setPanelView("details");
   }, [pane.view, sideChat]);
   (0, import_react69.useEffect)(() => {
+    if (pane.view === "work" && activeWork === null) actions.setPanelView("details");
+  }, [pane.view, activeWork]);
+  (0, import_react69.useEffect)(() => {
     if (view !== "browser" || leaving) void actions.browserShow?.(null);
   }, [view, leaving]);
   (0, import_react69.useEffect)(() => () => {
@@ -43064,9 +43343,9 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
       return;
     }
     if (!panel) return;
-    const plan = planFlight(flight.active(), next);
+    const plan = subjectRoom ? "keep" : planFlight(flight.active(), next);
     const source = plan === "start" ? panel.querySelector(FLIGHT_ENDS[flightStart(next)]) : null;
-    const flies = plan !== "keep" && (plan === "reverse" || source !== null);
+    const flies = !subjectRoom && plan !== "keep" && (plan === "reverse" || source !== null);
     const outgoing = panel.querySelector(":scope > .bt-panel-view");
     if (outgoing) {
       const ghostEl = document.createElement("div");
@@ -43081,7 +43360,7 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
       ], { duration: 160, easing: "ease-out", fill: "forwards" }).finished.catch(() => {
       }).finally(() => ghostEl.remove());
     }
-    if (plan === "start" && source === null) return;
+    if (subjectRoom || plan === "start" && source === null) return;
     intent.current = {
       plan,
       next,
@@ -43110,11 +43389,17 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
       return actions[name](...args);
     };
   }
+  for (const name of ["openGroupWork", "openPanelWork"]) {
+    if (actions[name]) panelActions[name] = (...args) => {
+      if (view !== "work") beginSwitch("work");
+      return actions[name](...args);
+    };
+  }
   (0, import_react69.useLayoutEffect)(() => {
     const note = intent.current;
     intent.current = null;
-    const current2 = note !== null && note.next === view && note.id === pane.id && performance.now() - note.at < INTENT_MS && !instant && !leaving && !reducedMotion();
-    if (!current2) {
+    const current3 = note !== null && note.next === view && note.id === pane.id && performance.now() - note.at < INTENT_MS && !instant && !leaving && !reducedMotion();
+    if (!current3) {
       flight.finish();
       return;
     }
@@ -43135,7 +43420,7 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
     const panel = root.current;
     const grip = event.currentTarget;
     grip.setPointerCapture?.(event.pointerId);
-    const range = widthRange(view, room2);
+    const range = widthRange(hasStrip, room2);
     const from = { x: event.clientX, width: panelWidth };
     let next = panelWidth;
     setDragging(true);
@@ -43172,14 +43457,13 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
     grip.addEventListener("pointermove", onMove);
     for (const name of ends) grip.addEventListener(name, onEnd);
   };
-  const hasStrip = panelHasStrip(canBrowse, tabState.ids.length, sideChats.length);
   return (0, import_react69.createElement)(
     "aside",
     {
       ref: root,
       className: "bt-panel",
       "data-view": view,
-      "aria-label": view === "browser" && bot ? t("{name}'s browser", { name: bot.name }) : view === "side" ? t("Side chat") : t("Conversation details"),
+      "aria-label": view === "browser" && bot ? t("{name}'s browser", { name: bot.name }) : view === "work" && activeWorkInfo ? `${activeWorkInfo.bot.name} · ${activeWorkInfo.room.name}` : view === "side" ? t("Side chat") : t("Conversation details"),
       "data-leaving": leaving || void 0,
       "aria-hidden": leaving || void 0,
       "data-settling": settling || void 0,
@@ -43195,8 +43479,8 @@ function BotPanel({ pane, leaving, room: room2, overlay, roster, actions, useSes
     // Over the whole window while dragging: the cursor stays a resize cursor and the
     // pages underneath (the chat, the guest) see no pointer.
     dragging ? (0, import_react_dom11.createPortal)((0, import_react69.createElement)("div", { className: "bt-drag-shield", "aria-hidden": true }), document.body) : null,
-    hasStrip ? (0, import_react69.createElement)(PanelStrip, { bot, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, canBrowse, reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
-    view === "browser" && bot ? (0, import_react69.createElement)(BrowserView, { key: `browser:${active}`, bot, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold }) : view === "side" && sideChat ? (0, import_react69.createElement)("div", { key: `side:${sideChat.id}`, className: "bt-panel-view" }, (0, import_react69.createElement)(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions })) : (0, import_react69.createElement)(
+    hasStrip ? (0, import_react69.createElement)(PanelStrip, { bot, subjectRoom, roster, subject: pane.id, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, works: workIds, work: activeWork, activeWorkInfo, canBrowse, canSide: !subjectRoom, reading, onView: switchView, actions: panelActions, useBrowserPages }) : null,
+    view === "browser" && bot ? (0, import_react69.createElement)(BrowserView, { key: `browser:${active}`, bot, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold }) : view === "work" && activeWork && activeWorkInfo ? (0, import_react69.createElement)(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions }) : view === "side" && sideChat ? (0, import_react69.createElement)("div", { key: `side:${sideChat.id}`, className: "bt-panel-view" }, (0, import_react69.createElement)(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions })) : (0, import_react69.createElement)(
       "div",
       { key: `details:${pane.id}:${pane.renaming ? "rename" : ""}:${pane.tab ?? ""}`, className: "bt-panel-view" },
       (0, import_react69.createElement)(DetailsDrawer, {
@@ -43243,7 +43527,15 @@ var BROWSER_CSS = `
 .bt-ptab-new:hover{color:var(--bt-ink)}
 .bt-ptab-new svg{width:15px;height:15px}
 .bt-ptab-ind{position:absolute;top:4px;bottom:4px;border-radius:8px;background:var(--bt-hover);opacity:0;pointer-events:none;z-index:0;transition:opacity .15s ease}
+.bt-ptab-expand{flex:none;width:28px;height:32px;border-radius:8px;color:var(--bt-ink-3)}
+.bt-ptab-expand:hover{color:var(--bt-ink)}
+.bt-ptab-expand svg{width:15px;height:15px}
 .bt-ptab-close{flex:none;margin-left:2px}
+.bt-panel-work{position:relative;min-width:0;overflow:hidden}
+.bt-panel-work>[data-conversation-content],.bt-panel-work>[class*="_root"]{flex:1;min-height:0;width:100%}
+.bt-panel-work [class*="_scroll"]:has(> [class*="_column"]){padding-top:14px!important}
+.bt-panel-work .bt-voice{display:none!important}
+.bt-work-loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--bt-ink-3)}
 .bt-panel-ghost{position:absolute;right:0;overflow:hidden;pointer-events:none;z-index:2}
 .bt-panel-ghost>.bt-panel-view{position:absolute;inset:0}
 .bt-panel-view{flex:1;min-height:0;display:flex;flex-direction:column;animation:bt-panel-view-in .22s cubic-bezier(.16,1,.3,1)}
@@ -43425,7 +43717,7 @@ var import_react71 = require("react");
 var import_react_dom12 = require("react-dom");
 var DIALOG_EXIT_MS2 = 160;
 var MENU_EXIT_MS3 = 120;
-function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity, useWork, useRegistry, useBrowserPages, useBrowserTabs, useBrowserHolds, useUpdate, useFrame, useSidebarPref, useSettingsShellHeld, actions }) {
+function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity, useWork, useRegistry, useBrowserPages, useBrowserTabs, useBrowserHolds, useUpdate, useFrame, useSidebarPref, useSettingsShellHeld, actions, SessionProvider, renderSlot }) {
   const roster = useRoster((value) => value);
   const ui2 = useUi((value) => value);
   useRegistry((value) => value);
@@ -43438,7 +43730,7 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
     previous.current = current2;
     if (current2) actions.followPanel?.(current2);
   }, [current2]);
-  const open = ui2.details ? { id: ui2.details, view: ui2.view ?? "details", renaming: ui2.renaming, tab: ui2.tab, side: ui2.side } : null;
+  const open = ui2.details ? { id: ui2.details, view: ui2.view ?? "details", renaming: ui2.renaming, tab: ui2.tab, side: ui2.side, work: ui2.work, works: ui2.works } : null;
   const layout = frameLayout({
     viewport: frameSnap.viewport,
     sidebarWidth: frameSnap.sidebarWidth,
@@ -43455,7 +43747,7 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
     }
     const timer = setTimeout(() => setKept(null), reducedMotion() ? 0 : PANEL_LINGER_MS);
     return () => clearTimeout(timer);
-  }, [ui2.details, ui2.view, ui2.renaming, ui2.tab, shown === null]);
+  }, [ui2.details, ui2.view, ui2.renaming, ui2.tab, ui2.work, shown === null]);
   const pane = shown ?? kept;
   const shellHeld = useSettingsShellHeld ? useSettingsShellHeld((value) => value) : false;
   const [settings, settingsLeaving] = useLinger(shellHeld ? null : ui2.settings, DIALOG_EXIT_MS2);
@@ -43474,7 +43766,7 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
     null,
     (0, import_react71.createElement)(NotificationWatcher, { key: "ds-bot:notifications", useSessions, useSessionStatus, useRoster, useWork, actions }),
     opening ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(OpeningCover, { model: opening, column: layout.column }), document.body) : null,
-    pane ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(BotPanel, { pane, leaving: shown === null, room: layout.room, overlay: layout.panel === "overlay", roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds }), document.body) : null,
+    pane ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(BotPanel, { pane, current: current2, leaving: shown === null, room: layout.room, overlay: layout.panel === "overlay", roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, SessionProvider, renderSlot }), document.body) : null,
     ui2.newChat ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(NewChat, { key: `${ui2.newChat}:${ui2.newChatSection ?? ""}`, mode: ui2.newChat, sectionId: ui2.newChatSection ?? null, paneLeft: layout.column, roster, actions }), document.body) : null,
     ui2.palette ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(CommandPalette, { key: ui2.palette.token, start: ui2.palette.query, token: ui2.palette.token, roster, actions, useSessions }), document.body) : null,
     ui2.groupSearch && roster.roomsById[ui2.groupSearch.roomId] ? (0, import_react_dom12.createPortal)((0, import_react71.createElement)(GroupSearch, { key: ui2.groupSearch.token, room: roster.roomsById[ui2.groupSearch.roomId], roster, token: ui2.groupSearch.token, actions }), document.body) : null,
@@ -44806,18 +45098,25 @@ var LEARNING_CSS = `
 
 // src/client/read-only-dock.js
 var import_react73 = require("react");
-function ReadOnlyDock({ sessionId, useUi, useRoster, actions }) {
+var BackMiniIcon = () => (0, import_react73.createElement)(
+  "svg",
+  { width: 13, height: 13, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+  (0, import_react73.createElement)("path", { d: "M9.8 3.8L5.5 8l4.3 4.2" })
+);
+function ReadOnlyDock({ sessionId, useSessions, useUi, useRoster, actions }) {
   const readOnlyPart = useUi((state) => state.readOnlyPart);
+  const groupWork = useRoster((state) => state.groupSessionOf?.[sessionId]);
   const bot = useRoster((state) => state.byId?.[sessionId] ?? Object.values(state.byId ?? {}).find((entry) => entry?.sessionId === sessionId));
   const running = useRoster((state) => state.partsRunning?.[sessionId] === true);
-  const active = readOnlyPart !== null && readOnlyPart === sessionId && running;
+  const inMain = useSessions ? useSessions((list) => (list.byId?.[sessionId]?.retainedBy?.mainView ?? 0) > 0) : true;
+  const active = groupWork !== void 0 || readOnlyPart !== null && readOnlyPart === sessionId && running;
   const root = (0, import_react73.useRef)(null);
   (0, import_react73.useEffect)(() => {
     if (readOnlyPart !== null && readOnlyPart === sessionId && !running) actions.clearReadOnlyPart?.();
   }, [readOnlyPart, sessionId, running]);
   (0, import_react73.useEffect)(() => {
     if (!active) return void 0;
-    const card = root.current?.closest("[data-composer-card]") ?? document.querySelector("[data-composer-card]");
+    const card = root.current?.closest("[data-conversation-content]")?.querySelector("[data-composer-card]") ?? root.current?.closest("[data-composer-card]") ?? document.querySelector("[data-composer-card]");
     if (card === null || card === void 0) return void 0;
     const onKey = (event) => {
       if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && !event.isComposing) {
@@ -44840,6 +45139,18 @@ function ReadOnlyDock({ sessionId, useUi, useRoster, actions }) {
       card.removeEventListener("click", onClick, true);
     };
   }, [active]);
+  if (groupWork !== void 0) {
+    return (0, import_react73.createElement)(
+      "div",
+      { ref: root, className: "bt-work-dock", hidden: !inMain ? true : void 0, role: "status" },
+      inMain ? (0, import_react73.createElement)(
+        "button",
+        { type: "button", className: "bt-work-pill bt-work-back", onClick: () => actions.openSession(groupWork.room.id) },
+        (0, import_react73.createElement)(BackMiniIcon),
+        (0, import_react73.createElement)("span", null, t("Back to {name}", { name: groupWork.room.name }))
+      ) : null
+    );
+  }
   return (0, import_react73.createElement)(
     "div",
     { ref: root, className: "bt-readonly-dock", "data-on": active ? "" : void 0, role: "status", hidden: !active },
@@ -44851,6 +45162,17 @@ var READ_ONLY_CSS = `
 .bt-readonly-dock{display:none}
 .bt-readonly-dock[data-on]{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;padding:8px 10px;border:.5px solid var(--bt-line);border-radius:12px;background:var(--bt-card);font-size:12px;line-height:17px;color:var(--bt-ink-2)}
 .bt-readonly-text{min-width:0}
+.bt-work-dock{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px;margin:0 auto 8px;pointer-events:none}
+.bt-work-dock[hidden]{display:none}
+.bt-work-pill{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border:0;border-radius:999px;background:var(--bt-main);box-shadow:0 0 0 .5px var(--bt-line-2),0 2px 8px -2px rgba(0,0,0,.12);color:var(--bt-ink-2);font:inherit;font-size:13px;line-height:18px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background-color .12s ease,color .12s ease,transform .14s cubic-bezier(.22,1,.36,1)}
+button.bt-work-pill:hover{background:color-mix(in srgb,var(--bt-ink) 4%,var(--bt-main));color:var(--bt-ink)}
+button.bt-work-pill:active{transform:scale(.97)}
+span.bt-work-pill{cursor:default}
+.bt-work-pill svg{width:13px;height:13px;flex:none}
+.bt-work-pill[data-tone=warn]{color:var(--bt-star)}
+.bt-work-pill[data-tone=accent]{background:var(--bt-accent);color:var(--bt-accent-ink);box-shadow:0 2px 8px -2px rgba(0,0,0,.18)}
+button.bt-work-pill[data-tone=accent]:hover{background:color-mix(in srgb,var(--bt-ink) 10%,var(--bt-accent));color:var(--bt-accent-ink)}
+.bt-work-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 `;
 
 // src/client/command-actions.js
@@ -45624,7 +45946,7 @@ function apply(ctx) {
   const reactionStore = sharedMap(STORAGE.reactions);
   const seenStore = sharedMap(STORAGE.seen);
   let seenAt = seenStore.read();
-  const ui2 = createSource({ details: null, view: "details", readOnlyPart: null, renaming: false, tab: null, side: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, paste: {}, pendingOpen: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {}, panelYield: false, leftDrawer: false, bootFailed: false, goalCompose: null, goalOpen: null });
+  const ui2 = createSource({ details: null, view: "details", readOnlyPart: null, renaming: false, tab: null, side: null, work: null, works: {}, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, paste: {}, pendingOpen: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {}, panelYield: false, leftDrawer: false, bootFailed: false, goalCompose: null, goalOpen: null });
   let sidebarSaved = readSidebar();
   const sidebarPref = createSource(sidebarSaved.pref);
   const frame = createSource({ viewport: typeof window === "undefined" ? 0 : window.innerWidth, sidebarWidth: sidebarSaved.width, collapsedWidth: 0, collapsed: false });
@@ -46055,6 +46377,7 @@ function apply(ctx) {
     const snapshot = roster.getSnapshot();
     if (snapshot.byId[sessionId] !== void 0) return snapshot.byId[sessionId];
     if (snapshot.roomsById[sessionId] !== void 0) return snapshot.roomsById[sessionId];
+    if (snapshot.groupSessionOf?.[sessionId] !== void 0) return snapshot.groupSessionOf[sessionId].bot;
     return Object.values(snapshot.byId).find((bot) => currentPart(bot) === sessionId) ?? Object.values(snapshot.roomsById).find((room2) => (room2.sessionId ?? room2.id) === sessionId);
   };
   const openingWait = bindOpeningWait(ui2, {
@@ -46084,7 +46407,7 @@ function apply(ctx) {
     const snapshot = roster.getSnapshot();
     if (!snapshot.ready || !snapshot.mainBotId) return;
     const main = mainView();
-    if (main !== void 0 && snapshot.byId[main] === void 0 && snapshot.roomsById[main] === void 0) {
+    if (main !== void 0 && snapshot.byId[main] === void 0 && snapshot.roomsById[main] === void 0 && snapshot.groupSessionOf?.[main] === void 0) {
       actions.openSession(snapshot.mainBotId);
     }
   };
@@ -46135,6 +46458,35 @@ function apply(ctx) {
       const target = partFor(id);
       show2(target);
     },
+    openGroupWork: (roomId, botId) => {
+      const snap = roster.getSnapshot();
+      const room2 = snap.roomsById[roomId];
+      const target = room2?.memberSessions?.[botId];
+      if (!target) return;
+      void Promise.resolve(ctx.sessions.refreshProjections?.(target)).catch(quietly("refresh projections"));
+      const main = mainView();
+      if (main === target) return;
+      const detailsId = ui2.getSnapshot().details ?? main ?? (room2.sessionId ?? room2.id);
+      actions.openPanelWork(detailsId, target);
+    },
+    openGroupWorkMain: (roomId, botId) => {
+      const target = roster.getSnapshot().roomsById[roomId]?.memberSessions?.[botId];
+      if (!target) return;
+      ui2.set((state) => ({
+        ...state,
+        newChat: null,
+        exchange: null,
+        menu: null,
+        palette: null,
+        groupSearch: null,
+        ...state.view === "work" && state.work === target ? { view: "details", work: null } : {}
+      }));
+      void Promise.resolve(ctx.sessions.refreshProjections?.(target)).catch(quietly("refresh projections"));
+      setPlain(false);
+      show2(target);
+    },
+    retainSession: (sessionId, signal) => ctx.sessions.retain(sessionId, { source: "botPanel", signal }),
+    refreshSessions: () => Promise.resolve(ctx.sessions.refresh?.()).catch(quietly("refresh sessions")),
     // The conversation replacements withdraw for a plain Session; set the surface
     // before the navigation so the Bot skin never flashes.
     openAgentSession: (sessionId) => {
@@ -46274,7 +46626,8 @@ function apply(ctx) {
     Object.assign(actions, {
       // The globe button: the Bot's active tab in the browser view, or a new tab.
       openBrowser: (id) => {
-        const bot = roster.getSnapshot().byId[id];
+        const snap = roster.getSnapshot();
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot;
         if (!bot) return;
         browsers.ensureTabs(bot.id);
         if (browsers.tabs.getSnapshot()[bot.id]?.active == null) browsers.openTab(bot.id);
@@ -46282,7 +46635,8 @@ function apply(ctx) {
       },
       // '+' on the strip or the drawer's new-tab card: a blank tab in the browser view.
       browserNewTab: (id) => {
-        const bot = roster.getSnapshot().byId[id];
+        const snap = roster.getSnapshot();
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot;
         if (!bot) return null;
         browsers.ensureTabs(bot.id);
         const tabId = browsers.openTab(bot.id);
@@ -46291,7 +46645,8 @@ function apply(ctx) {
       },
       // A drawer card: its tab active, the panel on the browser view.
       browserPick: (id, tabId) => {
-        const bot = roster.getSnapshot().byId[id];
+        const snap = roster.getSnapshot();
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot;
         if (!bot) return;
         browsers.activate(bot.id, tabId);
         ui2.set((state) => ({ ...state, details: id, view: "browser", panelYield: yieldBrowser(state) }));
@@ -46701,6 +47056,19 @@ function apply(ctx) {
       for (const off of offs) off();
     };
   };
+  const FixedChatConversationView = (props) => props.renderSlot("conversation.session", { view: "chat" });
+  const PanelConversation = ({ sessionId, useSession, useConversation, useSessions, renderFactorySlot }) => {
+    const session = useSession((value) => value);
+    const shellPhase = useConversation((value) => value).activeTargets.size > 0 || !session.blank && !session.awaitingFirstTurn || session.running ? "active" : session.promptAttempted ? "engaging" : "blank";
+    const summaryBlank = useSessions((state) => state.byId[sessionId]?.blank);
+    const settling = shellPhase === "blank" && session.openState === "loading" && summaryBlank !== true;
+    const hero = shellPhase === "blank" && (session.openState === "open" || summaryBlank === true);
+    return renderFactorySlot("conversation.content", {
+      variant: "embedded",
+      phase: settling ? "settling" : hero ? "hero" : "active",
+      hero
+    }, { slots: { views: FixedChatConversationView } });
+  };
   const installShell = () => [
     () => {
       shellSheets += 1;
@@ -46721,7 +47089,13 @@ function apply(ctx) {
     // Desktop's "··· More"), which comes back in Agent mode.
     () => shadow("settings.launcher", { priority: BOT_PRIORITY, inject: face }, AccountLauncher),
     () => shadow("shell.overlay", { id: "bot-computer", order: 40, inject: face }, ComputerIndicator),
-    () => shadow("shell.overlay", { id: "bot", order: 50, inject: face }, Overlays),
+    () => shadow("shell.overlay", {
+      id: "bot",
+      order: 50,
+      inject: face,
+      children: { "ds-bot.panel.conversation": { kind: "single", scope: "session" } }
+    }, Overlays),
+    () => shadow("ds-bot.panel.conversation", {}, PanelConversation),
     () => shadow("shell.overlay", { id: "bot-signin", order: 55, inject: face }, DeepSeekSignIn),
     () => shadow("shell.overlay", { id: "bot-toast", order: 60, inject: face }, ErrorToast)
   ];
@@ -46824,7 +47198,7 @@ function apply(ctx) {
       const agentId = before !== void 0 ? agentOfSession(before) : void 0;
       if (agentId === void 0) return;
       const snapshot = roster.getSnapshot();
-      if (snapshot.byId[main] !== void 0 || snapshot.roomsById[main] !== void 0 || agentOfSession(main) !== void 0) return;
+      if (snapshot.byId[main] !== void 0 || snapshot.roomsById[main] !== void 0 || snapshot.groupSessionOf?.[main] !== void 0 || agentOfSession(main) !== void 0) return;
       const row = list.byId[main];
       if (row?.origin === "subagent") return;
       const parent = row?.parentId ?? row?.parentSessionId;

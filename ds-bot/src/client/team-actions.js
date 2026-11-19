@@ -16,6 +16,13 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
   // `view` is the next view, since its minimum decides what fits; a yield already
   // given stays.
   const yieldTo = (state, view) => state.panelYield === true || panelFolded?.(view) === true
+  const workKeyOf = (snap, id) => {
+    const room = snap?.roomsById?.[id]
+    if (room) return `room:${room.id}`
+    const bot = snap?.byId?.[id]
+    if (bot) return `bot:${bot.id}`
+    return null
+  }
   // The panel on a side chat's view, on the chat the strip tab or menu named.
   const openSideChat = (sessionId, chatId) => {
     ui.set(state => ({ ...state, details: sessionId, view: 'side', side: chatId ?? null, renaming: false, tab: null, panelYield: yieldTo(state, 'side') }))
@@ -50,9 +57,13 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
       ui.set((state) => {
         if (!state.details || state.details === id) return state
         const snap = roster.getSnapshot()
-        const view = state.view === 'browser' && snap.byId[id] === undefined ? 'details'
-          : state.view === 'side' && !(snap.sideChats?.[snap.byId[id]?.id] ?? []).some(chat => chat?.id === state.side) ? 'details'
-            : state.view
+        const ownerBot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot
+        const nextKey = workKeyOf(snap, id)
+        const nextWorks = nextKey ? (state.works?.[nextKey] ?? []) : []
+        const view = state.view === 'browser' && ownerBot === undefined ? 'details'
+          : state.view === 'side' && !(snap.sideChats?.[ownerBot?.id] ?? []).some(chat => chat?.id === state.side) ? 'details'
+            : state.view === 'work' && (!state.work || state.work === id || !nextWorks.includes(state.work) || snap.groupSessionOf?.[state.work] === undefined) ? 'details'
+              : state.view
         return { ...state, details: id, view, renaming: false, tab: null }
       })
     },
@@ -67,8 +78,37 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     closeMemory: () => { ui.set(state => (state.memory ? { ...state, memory: null } : state)) },
     openConnectors: () => { ui.set(state => ({ ...state, settings: { page: 'connectors', id: null }, menu: null, palette: null, newChat: null })) },
     setPanelView: (view) => {
-      if (view !== 'details' && view !== 'browser' && view !== 'side') return
+      if (view !== 'details' && view !== 'browser' && view !== 'side' && view !== 'work') return
       ui.set(state => (state.details && state.view !== view ? { ...state, view, panelYield: yieldTo(state, view) } : state))
+    },
+    openPanelWork: (detailsId, workSessionId) => {
+      ui.set((state) => {
+        const key = workKeyOf(roster.getSnapshot(), detailsId)
+        if (!key || !workSessionId) return state
+        const current = state.works?.[key] ?? []
+        const list = current.includes(workSessionId) ? current : [...current, workSessionId]
+        return {
+          ...state,
+          details: detailsId,
+          view: 'work',
+          work: workSessionId,
+          works: { ...state.works, [key]: list },
+          renaming: false,
+          tab: null,
+          panelYield: yieldTo(state, 'work'),
+        }
+      })
+    },
+    closePanelWork: (detailsId, workSessionId) => {
+      ui.set((state) => {
+        const key = workKeyOf(roster.getSnapshot(), detailsId)
+        if (!key) return state
+        const list = (state.works?.[key] ?? []).filter(id => id !== workSessionId)
+        const works = { ...state.works, [key]: list }
+        if (state.view !== 'work' || state.work !== workSessionId) return { ...state, works }
+        const nextWork = list.at(-1) ?? null
+        return { ...state, works, view: nextWork ? 'work' : 'details', work: nextWork }
+      })
     },
     // A side chat on the panel's own view, opened from the strip, the `···`
     // menus or `/side`. Closing the panel keeps the chats; only a tab's × deletes.
@@ -87,7 +127,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
       ui.set(state => (state.details && state.view === 'side' && state.side === chatId ? { ...state, view: 'details', side: null } : state))
       return after(call('side-close', { chatId }))
     },
-    closePanel: () => { ui.set(state => (state.details ? { ...state, details: null, view: 'details', renaming: false, tab: null, side: null } : state)) },
+    closePanel: () => { ui.set(state => (state.details ? { ...state, details: null, view: 'details', renaming: false, tab: null, side: null, work: null } : state)) },
     quote: (sessionId, text) => ui.set(state => ({ ...state, quote: { sessionId, text, token: Date.now() } })),
     // A long paste becomes a card; its text stays here until it goes back into the box.
     addPaste: (sessionId, text, name) => {
@@ -263,7 +303,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     // Hours come back in this browser's time zone, so days start at local midnight.
     usage: () => call('usage', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     // The details panel's status line: turns, speed, cache hits and context for one Bot.
-    runStats: botId => call('run-stats', { botId }),
+    runStats: (botId, sessionId) => call('run-stats', { botId, ...(sessionId ? { sessionId } : {}) }),
     // `summarize` starts a summary when the entries changed; `regenerate` always does.
     memoryView: (id, flags = {}) => call('memory-view', { ...memoryOf(id), ...flags }),
     memoryAsk: (id, text) => call('memory-ask', { ...memoryOf(id), text }),
