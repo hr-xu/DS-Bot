@@ -81,6 +81,7 @@ export function install(rt) {
     spawnEngine,
     usedModels: route => usedRefs().map(ref => splitRef(ref)).filter(used => used?.provider === route).map(used => used.model),
     record: sessionId => store().sessions[sessionId],
+    records: () => Object.values(store().sessions),
     saveRecord: (sessionId, record) => {
       store().sessions[sessionId] = record
       void rt.save().catch(() => {})

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { format } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
-import { LocalAgentAdapter } from '../src/host/local-agents/adapter.js'
+import { DEFAULT_CONTEXT_WINDOW, LocalAgentAdapter } from '../src/host/local-agents/adapter.js'
 import { AcpEngine, modelsFromProbe, usageOf } from '../src/host/local-agents/acp.js'
 import { ENGINES } from '../src/host/local-agents/engines.js'
 import { CodexEngine } from '../src/host/local-agents/codex.js'
@@ -72,6 +72,7 @@ function makeAdapter({ kind = 'acp', args = [], records = {}, usage = [], engine
       return engine
     },
     record: sessionId => records[sessionId],
+    records: () => Object.values(records),
     saveRecord: (sessionId, record) => { records[sessionId] = record },
     patchRecord: (sessionId, patch) => { if (records[sessionId]) Object.assign(records[sessionId], patch) },
     recordUsage: entry => usage.push(entry),
@@ -661,4 +662,55 @@ test('Antigravity 1.5.9, as recorded: models with per-model thinking levels, con
     outputTokens: 137,
     cacheReadTokens: 8112,
   })
+})
+
+test('resolveModel learns per-(route, model) context windows from live turns and hydrates them across restarts', async (t) => {
+  const records = {}
+  const adapter = makeAdapter({ records })
+  t.after(() => adapter.dispose())
+
+  assert.equal((await adapter.resolveModel('local-acp-fake', 'default')).context.contextWindow, DEFAULT_CONTEXT_WINDOW)
+  await turn(adapter, 's1', [user('m1', 'hello')])
+  assert.equal((await adapter.resolveModel('local-acp-fake', 'default')).context.contextWindow, 262_000)
+  // Another model on the same route keeps the default until it reports its own window.
+  assert.equal((await adapter.resolveModel('local-acp-fake', 'other-model')).context.contextWindow, DEFAULT_CONTEXT_WINDOW)
+  // The learned size was persisted with the session record on first observation.
+  assert.equal(records.s1.context.size, 262_000)
+
+  // A fresh adapter after restart hydrates the learned window from persisted session records.
+  const restarted = makeAdapter({ records })
+  t.after(() => restarted.dispose())
+  assert.equal((await restarted.resolveModel('local-acp-fake', 'default')).context.contextWindow, 262_000)
+  assert.equal((await restarted.resolveModel('local-acp-fake', 'other-model')).context.contextWindow, DEFAULT_CONTEXT_WINDOW)
+})
+
+test('resolveModel ignores invalid sizes, prefers newer observations, and does not carry a prior model window across a model switch', async (t) => {
+  const records = {
+    s1: { route: 'local-antigravity', model: 'gemini-4-carbon', context: { used: 12_000, size: 1_048_576 } },
+    s2: { route: 'local-antigravity', model: 'gpt-oss-120b-medium', context: { used: 2_000, size: 131_072 } },
+    bad: { route: 'local-antigravity', model: 'bad-model', context: { used: 100, size: 12.5 } },
+  }
+  const adapter = makeAdapter({ records })
+  t.after(() => adapter.dispose())
+
+  assert.equal((await adapter.resolveModel('local-antigravity', 'gemini-4-carbon')).context.contextWindow, 1_048_576)
+  assert.equal((await adapter.resolveModel('local-antigravity', 'gpt-oss-120b-medium')).context.contextWindow, 131_072)
+  assert.equal((await adapter.resolveModel('local-antigravity', 'bad-model')).context.contextWindow, DEFAULT_CONTEXT_WINDOW)
+
+  // Invalid live sizes (0, negative, float, NaN) are ignored; a valid positive integer updates the window.
+  const live = { sessionId: 's1', route: 'local-antigravity', model: 'gemini-4-carbon', spec: { kind: 'acp' }, context: { used: 12_000, size: 1_048_576 }, compactions: 0 }
+  for (const invalid of [0, -100, 123.45, NaN, Infinity, '1048576']) {
+    adapter.observe(live, { type: 'context', used: 13_000, size: invalid })
+  }
+  assert.equal((await adapter.resolveModel('local-antigravity', 'gemini-4-carbon')).context.contextWindow, 1_048_576)
+
+  adapter.observe(live, { type: 'context', used: 14_000, size: 2_000_000 })
+  assert.equal((await adapter.resolveModel('local-antigravity', 'gemini-4-carbon')).context.contextWindow, 2_000_000)
+  assert.equal(records.s1.context.size, 2_000_000)
+
+  // Switching models on the same session drops the previous model's size so it is not misattributed.
+  const switched = await adapter.liveFor({ sessionId: 's1', provider: 'local-antigravity', model: 'fresh-model' }, 'workspace-write')
+  assert.equal(switched.context?.size, undefined)
+  assert.equal(switched.context?.used, 14_000)
+  assert.equal((await adapter.resolveModel('local-antigravity', 'fresh-model')).context.contextWindow, DEFAULT_CONTEXT_WINDOW)
 })

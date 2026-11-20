@@ -40,6 +40,23 @@ export function errorCode(error) {
   return isInternal(error) ? 'bot/internal' : 'bot/refused'
 }
 
+// Overlays a local agent CLI's live context onto DSH's run-stats snapshot without
+// mutating DSH's projection values.
+export function runStatsValues(values, localContext) {
+  if (localContext === undefined || localContext === null) return values
+  const size = Number.isInteger(localContext.size) && localContext.size > 0 ? localContext.size : undefined
+  const used = Number.isInteger(localContext.used) && localContext.used >= 0 ? localContext.used : undefined
+  if (size === undefined && used === undefined) return values
+  const base = values !== null && typeof values === 'object' ? values : {}
+  const pressure = base.contextPressure !== null && typeof base.contextPressure === 'object' ? { ...base.contextPressure } : {}
+  if (size !== undefined) pressure.contextWindow = size
+  if (used !== undefined) {
+    pressure.pressureTokens = used
+    pressure.projectedTokens = used
+  }
+  return { ...base, contextPressure: pressure }
+}
+
 export function install(rt) {
   installBtw(rt)
   installSide(rt)
@@ -347,8 +364,10 @@ export function install(rt) {
           if (bot === undefined) return fail('Unknown Bot', 'bot/not-found')
           const projections = ctx.get?.('sessionProjections')
           if (projections === undefined) return ok(null)
-          const agent = await rt.resolveAgent(rt.chatOf(bot.id))
-          return ok(projections.snapshot(agent.session, RUN_STATS).values)
+          const target = rt.chatOf(bot.id)
+          const agent = await rt.resolveAgent(target)
+          const local = rt.isLocalAgentSession?.(target) === true ? rt.localAgentContext?.(target) : undefined
+          return ok(runStatsValues(projections.snapshot(agent.session, RUN_STATS).values, local))
         }
         case 'usage':
           await rt.load()

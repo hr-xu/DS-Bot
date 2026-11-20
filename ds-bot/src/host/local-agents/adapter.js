@@ -10,6 +10,8 @@ import { engineOf, cliMode } from './engines.js'
 import { LoopbackMcp } from './mcp.js'
 
 export const DEFAULT_CONTEXT_WINDOW = 200_000
+const positiveInt = value => (Number.isInteger(value) && value > 0 ? value : undefined)
+const windowKey = (route, model) => `${route}\0${model}`
 // The replay window when a CLI session is new or its resume failed.
 const REPLAY_MESSAGES = 12
 const REPLAY_BYTES = 24 * 1024
@@ -58,7 +60,7 @@ const RESUME_RETRIED = Symbol('resume retried')
 
 export class LocalAgentAdapter extends LlmAdapter {
   // deps: {rt, findExecutable, spawnEngine(kind,route,engine), record(sessionId),
-  //        saveRecord, dropRecord, presetFor(sessionId), toolsFor(options), signInHint(route),
+  //        records?(), saveRecord, patchRecord, presetFor(sessionId), toolsFor(options),
   //        usedModels(route)}
   constructor(deps) {
     super()
@@ -66,6 +68,7 @@ export class LocalAgentAdapter extends LlmAdapter {
     this.engines = new Map()   // route -> engine driver
     this.live = new Map()      // sessionId -> live session
     this.modelCache = new Map()
+    this.contextWindows = new Map() // `${route}\0${model}` -> learned window size
     this.probes = new Map()    // route -> the probe under way
     this.sideRequests = new Set()
     this.disposed = false
@@ -127,16 +130,35 @@ export class LocalAgentAdapter extends LlmAdapter {
     else this.modelCache.delete(route)
   }
 
+  contextWindowOf(route, model) {
+    const learned = this.contextWindows.get(windowKey(route, model))
+    if (learned !== undefined) return learned
+    let persisted
+    for (const record of this.deps.records?.() ?? []) {
+      if (record?.route !== route || record?.model !== model) continue
+      const size = positiveInt(record?.context?.size)
+      if (size !== undefined) persisted = size
+    }
+    if (persisted !== undefined) return persisted
+    for (const live of this.live.values()) {
+      if (live.route !== route || live.model !== model) continue
+      const size = positiveInt(live.context?.size)
+      if (size !== undefined) persisted = size
+    }
+    return persisted
+  }
+
   async resolveModel(route, model) {
     const spec = engineOf(route, this.deps.customAgents())
     const listed = (await this.listModels(route).catch(() => [])).find(entry => entry.id === model)
     const supportsImage = spec?.kind !== 'acp' || this.engines.get(route)?.supportsImages?.() !== false
+    const contextWindow = positiveInt(spec?.contextWindow) ?? this.contextWindowOf(route, model) ?? DEFAULT_CONTEXT_WINDOW
     return {
       provider: route,
       id: model,
       name: listed?.name ?? model,
       inputModalities: supportsImage ? ['text', 'image'] : ['text'],
-      context: { contextWindow: spec?.contextWindow ?? DEFAULT_CONTEXT_WINDOW },
+      context: { contextWindow },
       // The thinking levels the engine advertises for this model, if any.
       ...(listed?.reasoning ? { reasoning: listed.reasoning } : {}),
     }
@@ -169,6 +191,13 @@ export class LocalAgentAdapter extends LlmAdapter {
     const spec = engineOf(route, this.deps.customAgents())
     if (spec === undefined) throw new LlmError(`Unknown local agent ${route}`, 'LOCAL_AGENT_MISSING')
     const engine = this.engine(route)
+    const sameModel = record?.model === undefined || record.model === options.model
+    const priorContext = record?.context
+    const context = priorContext === undefined || sameModel
+      ? priorContext
+      : (priorContext.used === undefined && priorContext.stale === undefined
+        ? undefined
+        : { ...(priorContext.used === undefined ? {} : { used: priorContext.used }), ...(priorContext.stale === undefined ? {} : { stale: priorContext.stale }) })
     live = {
       sessionId, route, spec, engine, dead: false,
       record,
@@ -195,7 +224,7 @@ export class LocalAgentAdapter extends LlmAdapter {
       preset,
       // What the CLI reported of its own context ({used, size, stale}) and how often
       // it condensed in this Session; the parts module decides with them.
-      context: record?.context,
+      context,
       compactions: record?.compactions ?? 0,
       // Output of a request DS Bot made for itself may trail its end (Devin's
       // "Context compacted"); until the next prompt, text, thoughts and activity drop.
@@ -245,11 +274,20 @@ export class LocalAgentAdapter extends LlmAdapter {
       return
     }
     if (event?.type === 'context') {
-      const size = Number.isFinite(event.size) && event.size > 0 ? event.size : live.context?.size
+      const reported = positiveInt(event.size)
+      const prevSize = positiveInt(live.context?.size)
+      const size = reported ?? prevSize
       live.context = Number.isFinite(event.used)
         ? { used: event.used, ...(size === undefined ? {} : { size }) }
         : { ...live.context, ...(size === undefined ? {} : { size }) }
-      this.deps.patchRecord?.(live.sessionId, { context: live.context })
+      if (reported !== undefined && live.route !== undefined && live.model !== undefined) {
+        this.contextWindows.set(windowKey(live.route, live.model), reported)
+      }
+      if (reported !== undefined && reported !== prevSize && this.deps.record?.(live.sessionId) !== undefined) {
+        this.deps.saveRecord(live.sessionId, this.recordOf(live))
+      } else {
+        this.deps.patchRecord?.(live.sessionId, { context: live.context })
+      }
       return
     }
     if (event?.type !== 'compaction') return
