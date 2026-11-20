@@ -14,6 +14,7 @@ import { frameLayout, readSidebar, writeSidebar, toggledPref, DSH_NARROW } from 
 import { installFrameWatch } from './frame-watch.js'
 import { HeaderPill } from './header.js'
 import { ComposerPlus, ComposerVoice, menuIcons } from './composer.js'
+import { BotPermissionPill } from './permission-picker.js'
 import { CHATS_SOURCE, atSources } from './at-menu.js'
 import { BtwDock, BtwTurnTail } from './btw.js'
 import { SIDE_CSS, sideSource } from './side-chat.js'
@@ -1279,7 +1280,7 @@ export function apply(ctx) {
       () => installBotMentionRule(ctx.uiConversation.userText, roster),
       () => shadow('conversation.user.text.node', { key: BOT_MENTION_ID, inject: face }, BotMention),
     ] : []),
-    () => shadow('conversation.input.permission', { priority: BOT_PRIORITY }, Nothing),
+    () => shadow('conversation.input.permission', { priority: BOT_PRIORITY, inject: face }, BotPermissionPill),
     () => shadow('conversation.input.plan', { priority: BOT_PRIORITY }, Nothing),
     // The composer carries no model picker or run statistics; a Bot's model lives
     // in its details panel.

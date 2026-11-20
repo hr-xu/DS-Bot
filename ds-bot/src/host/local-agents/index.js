@@ -22,6 +22,14 @@ const spawnEngine = (kind, route, spec) => (kind === 'acp' ? new AcpEngine(route
   : kind === 'codex' ? new CodexEngine(route, spec, { findExecutable })
     : new ClaudeEngine(route, spec, { findExecutable }))
 
+// Resolves a local-agent Session's effective preset in the same order as DSH and DetailsDrawer:
+// group override first, then the Bot's own preset, then DSH's default preset.
+export function resolveLocalAgentPreset(rt, sessionId) {
+  const bot = rt.botOf(rt.selfOf(sessionId))
+  const room = rt.roomOf(rt.groupOwners.get(sessionId)?.roomId)
+  return room?.permission ?? bot?.permission ?? rt.permissionCatalog?.()?.defaultPreset ?? 'workspace-write'
+}
+
 export function install(rt) {
   const { ctx, state } = rt
   // state.localAgents is replaced by the state load after install; read it
@@ -92,11 +100,7 @@ export function install(rt) {
       const record = store().sessions[sessionId]
       if (record !== undefined) Object.assign(record, patch)
     },
-    presetFor: (sessionId) => {
-      const bot = rt.botOf(rt.selfOf(sessionId))
-      const room = rt.roomOf(rt.groupOwners.get(sessionId)?.roomId)
-      return room?.permission ?? bot?.permission ?? 'workspace-write'
-    },
+    presetFor: sessionId => resolveLocalAgentPreset(rt, sessionId),
     cwdFor: async (sessionId) => {
       try {
         const agent = await rt.resolveAgent(sessionId)
