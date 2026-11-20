@@ -274,6 +274,8 @@ export function install(rt) {
     isLocalAgentAvailable: route => registeredRoutes.has(route),
     engineNameOf: ref => (isLocalAgentRef(ref) ? adapter.providerInfo(splitRef(ref).provider).name : `the model ${ref}`),
     closeLocalAgentSession: (sessionId, reason) => adapter.closeSession(sessionId, reason),
+    syncLocalAgentPreset: (sessionId, preset) => adapter.syncPreset(sessionId, preset),
+    allowLocalAgentForSession: (sessionId, callId) => adapter.rememberSessionAllow(sessionId, callId),
     // The parts module's view of a CLI session's context, and the requests it makes of
     // the CLI when the conversation grows long: condense, write the handoff note, and
     // answer the context steward when the team has no model of its own.

@@ -25,7 +25,10 @@ export function install(rt) {
   async function setPreset(sessionId, name) {
     const agent = await rt.resolveAgent(sessionId)
     const wanted = typeof name === 'function' ? name() : name
-    if (wanted) presets().set(agent.session, wanted)
+    if (wanted) {
+      presets().set(agent.session, wanted)
+      void Promise.resolve(rt.syncLocalAgentPreset?.(sessionId, wanted)).catch(() => {})
+    }
     return wanted
   }
 

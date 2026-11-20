@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { LlmAdapter, LlmError, offloadedImageText, resolveImageAttachmentAccess, textOnlyImageText } from '@deepseek-ai/dsh-llm'
 import { textOf } from '../text.js'
-import { engineOf, cliMode } from './engines.js'
+import { acpMode, engineOf, cliMode } from './engines.js'
 import { LoopbackMcp } from './mcp.js'
 
 export const DEFAULT_CONTEXT_WINDOW = 200_000
@@ -181,7 +181,8 @@ export class LocalAgentAdapter extends LlmAdapter {
       mcp: undefined,
       events: [],
       waiters: [],
-      pending: new Map(),   // dshCallId -> {name, mcpCallId?, reply?}
+      pending: new Map(),   // dshCallId -> {name, mcpCallId?, reply?, allowKey?}
+      sessionAllows: new Set(), // in-memory session-scoped allow rules; never persisted
       started: false,
       // 'idle': no CLI turn. 'running': a prompt is in flight. 'suspended': the
       // turn waits on a bridged tool call or a permission answer.
@@ -295,6 +296,7 @@ export class LocalAgentAdapter extends LlmAdapter {
   async closeLive(live, { idle = false } = {}) {
     if (live.dead) return
     live.dead = true
+    live.sessionAllows?.clear()
     clearTimeout(live.idle)
     this.live.delete(live.sessionId)
     live.engine.forget?.(live.sessionId)
@@ -770,11 +772,16 @@ export class LocalAgentAdapter extends LlmAdapter {
           // matching mode of its own: full access allows, read-only refuses a change.
           const answer = presetAnswer(this.deps.presetFor(live.sessionId), event)
           if (answer !== undefined) { event.reply(answer); break }
+          const allowKey = sessionAllowKey(event)
+          if (allowKey !== undefined && live.sessionAllows?.has(allowKey)) {
+            const once = optionOf(event.options, 'allow')
+            if (once !== undefined) { event.reply(once); break }
+          }
           yield* closeBlocks()
           live.state = 'suspended'
           // The CLI's own permission prompt, bridged as an approval tool call.
           const call = { name: APPROVE_TOOL, args: { action: event.action, ...(event.detail ? { detail: event.detail } : {}) }, dshCallId: event.id }
-          live.pending.set(event.id, { name: APPROVE_TOOL, resolve: (result) => event.reply(pickAllowOption(event.options, result)) })
+          live.pending.set(event.id, { name: APPROVE_TOOL, allowKey, resolve: (result) => event.reply(pickAllowOption(event.options, result)) })
           for (const chunk of emitCalls([call])) yield chunk
           yield { type: 'finish', reason: { kind: 'tool-calls' } }
           return
@@ -898,6 +905,39 @@ export class LocalAgentAdapter extends LlmAdapter {
         if (live.pumpToken === token && !live.dead) live.push(event)
       }
     })()
+  }
+
+  // Applies a permission preset change to a live Session without waiting for the next
+  // turn: tightening drops in-memory session allow rules, and active ACP sessions
+  // switch mode immediately (best-effort, non-throwing).
+  async syncPreset(sessionId, nextPreset) {
+    const live = this.live.get(String(sessionId))
+    if (live === undefined || live.dead) return
+    if (nextPreset !== undefined && isPresetTightened(live.preset, nextPreset)) {
+      live.sessionAllows?.clear()
+    }
+    if (live.spec.kind === 'acp' && live.engineSession !== undefined && !live.engineSession.dead) {
+      const nextMode = acpMode(nextPreset, live.engineSession.modes ?? [], live.spec.modes)
+      if (nextMode === undefined) {
+        live.preset = nextPreset
+      } else {
+        const ok = await Promise.resolve(live.engine.setOption?.(live.engineSession, 'mode', nextMode)).then(() => true, () => false)
+        if (ok) live.preset = nextPreset
+      }
+    }
+  }
+
+  // Records a pending approve_agent_action prompt's rule key in memory for this live
+  // Session so matching prompts auto-allow until the Session closes or tightens.
+  rememberSessionAllow(sessionId, callId) {
+    const live = this.live.get(String(sessionId))
+    if (live === undefined || live.dead) return false
+    const pending = callId !== undefined
+      ? live.pending.get(callId)
+      : [...live.pending.values()].find(entry => entry.name === APPROVE_TOOL)
+    if (pending?.allowKey === undefined) return false
+    live.sessionAllows.add(pending.allowKey)
+    return true
   }
 
   // The next event of a live session, as a wait that can be given up: a wait left
@@ -1070,6 +1110,41 @@ function presetAnswer(preset, event) {
   if (preset === 'danger-full-access') return optionOf(event.options, 'allow')
   if (preset === 'read-only' && event.changes === true) return optionOf(event.options, 'reject') ?? null
   return undefined
+}
+
+const PRESET_RANK = { 'read-only': 0, 'workspace-write': 1, 'danger-full-access': 2 }
+const isPresetTightened = (from, to) => from !== undefined && to !== undefined && (PRESET_RANK[to] ?? 1) < (PRESET_RANK[from] ?? 1)
+
+// Extracts a conservative executable signature from a shell command string so
+// "Allow for session" groups repeated invocations of the same command tool
+// (e.g. `npm test` / `npm run lint` -> `execute:npm`) without letting a chained
+// command (`npm test && rm -rf .`) piggyback on a simpler rule.
+function commandKey(raw) {
+  const trimmed = String(raw ?? '').trim()
+  if (trimmed === '') return 'execute'
+  if (/[`>]|\$\(/.test(trimmed)) return `execute:raw:${trimmed}`
+  const heads = []
+  for (const segment of trimmed.split(/(?:&&|\|\||[;|\n])+/)) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean)
+    const first = tokens.find(token => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(token))
+    if (first === undefined) continue
+    const clean = first.replace(/^['"]|['"]$/g, '').split(/[\\/]/).at(-1)?.toLowerCase()
+    if (clean && !heads.includes(clean)) heads.push(clean)
+  }
+  return heads.length > 0 ? `execute:${heads.join('+')}` : 'execute'
+}
+
+// Stable, conservative in-memory key for session-scoped local-CLI approvals.
+export function sessionAllowKey(event) {
+  const kind = typeof event?.kind === 'string' && event.kind.trim() !== '' ? event.kind.trim().toLowerCase() : undefined
+  const action = String(event?.action ?? '').trim()
+  const backtickCommand = action.match(/`([^`]+)`/)?.[1]
+  if (kind === 'execute' || (kind === undefined && /^Run\s+`/.test(action))) {
+    return commandKey(event?.command ?? backtickCommand)
+  }
+  if (kind === 'delete') return action ? `delete:${action}` : 'delete'
+  if (kind !== undefined) return kind
+  return action ? `action:${action}` : undefined
 }
 
 // Collapse consecutive text blocks with paragraph breaks while keeping non-text blocks in place.

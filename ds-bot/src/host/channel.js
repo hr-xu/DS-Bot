@@ -522,8 +522,13 @@ export function install(rt) {
           await rt.deleteRoom(body.id)
           return ok(view())
         case 'approval-answer':
-          rt.answerApproval(body.id, body.choice)
+          rt.answerApproval(body.id, body.choice, { scope: body.scope === 'session' ? 'session' : undefined })
           return ok(true)
+        case 'approval-allow-session': {
+          const sessionId = String(body.sessionId ?? '')
+          if (sessionId === '' || rt.selfOf(sessionId) === undefined) return fail('Unknown session', 'bot/not-found')
+          return ok(rt.allowLocalAgentForSession?.(sessionId, body.callId === undefined ? undefined : String(body.callId)) === true)
+        }
         // A stop that fails partway still parks the goal, or it wakes the admin again.
         case 'stop-member-work':
           try {

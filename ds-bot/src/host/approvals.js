@@ -34,6 +34,7 @@ export function install(rt) {
       sessionId,
       botId,
       ...(owner ? { roomId: owner.roomId } : {}),
+      ...(request.callId !== undefined ? { callId: request.callId } : {}),
       tool: String(request.toolName ?? ''),
       reason: String(request.reason ?? '').slice(0, 500),
       detail: rt.callDetail?.(sessionId, request.callId) ?? {},
@@ -98,11 +99,14 @@ export function install(rt) {
   const approvalsView = () => [...pending.values()].map(({ answer, ...entry }) => ({ ...entry, answerable: answer !== undefined }))
   const waitsForApproval = sessionId => [...pending.values()].some(entry => entry.sessionId === sessionId)
 
-  function answerApproval(id, choice) {
+  function answerApproval(id, choice, { scope } = {}) {
     const entry = pending.get(String(id ?? ''))
     if (entry?.answer === undefined) throw Object.assign(new Error('This approval is no longer open'), { code: 'bot/stale' })
     const outcome = OUTCOMES[choice]
     if (outcome === undefined) throw Object.assign(new Error('Choose allow or reject'), { code: 'bot/invalid' })
+    if (outcome === 'allowed-once' && scope === 'session' && entry.tool === 'approve_agent_action') {
+      rt.allowLocalAgentForSession?.(entry.sessionId, entry.callId)
+    }
     entry.answer(outcome)
   }
 

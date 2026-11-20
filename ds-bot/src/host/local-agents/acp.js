@@ -238,6 +238,8 @@ export class AcpEngine {
       const once = ownToolCall(call) ? options.find(option => option.kind === 'allow_once') : undefined
       if (once !== undefined) return Promise.resolve({ outcome: { outcome: 'selected', optionId: once.optionId } })
       const action = describeCall(call)
+      const input = inputOf(call)
+      const command = input.command ?? input.cmd ?? input.CommandLine
       return new Promise((resolve) => {
         const id = `perm-${Math.random().toString(36).slice(2)}`
         const reply = (optionId) => {
@@ -250,6 +252,8 @@ export class AcpEngine {
           detail: detailText(call, action),
           options,
           changes: CHANGE_KINDS.has(call.kind),
+          ...(typeof call.kind === 'string' ? { kind: call.kind } : {}),
+          ...(typeof command === 'string' ? { command } : {}),
         })
       })
     }

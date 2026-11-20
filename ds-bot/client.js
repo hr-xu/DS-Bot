@@ -1083,6 +1083,8 @@ var JA = {
   "Goal stopped": "目標を終了しました",
   "Reject": "拒否",
   "Allow once": "今回のみ許可",
+  "Allow for session": "このセッション中許可",
+  "Approval details": "承認の詳細",
   "Couldn't message {name}": "{name} にメッセージを送信できませんでした",
   "Messaged": "送信先:",
   "Couldn't stop {name}": "{name} を停止できませんでした",
@@ -3532,6 +3534,8 @@ var KO = {
   "Goal stopped": "목표 종료됨",
   Reject: "거절",
   "Allow once": "한 번만 허용",
+  "Allow for session": "이번 세션에서 허용",
+  "Approval details": "승인 세부 정보",
   "Couldn't message {name}": "{name}에게 메시지를 보내지 못했습니다",
   Messaged: "메시지 전송됨:",
   "Couldn't stop {name}": "{name}을(를) 중지하지 못했습니다",
@@ -5996,6 +6000,8 @@ var ES = {
   "Goal stopped": "Objetivo detenido",
   Reject: "Rechazar",
   "Allow once": "Permitir una vez",
+  "Allow for session": "Permitir en esta sesión",
+  "Approval details": "Detalles de aprobación",
   "Couldn't message {name}": "No se pudo enviar mensaje a {name}",
   Messaged: "Mensaje enviado a",
   "Couldn't stop {name}": "No se pudo detener a {name}",
@@ -8430,6 +8436,8 @@ var FR = {
   "Goal stopped": "Objectif arrêté",
   "Reject": "Refuser",
   "Allow once": "Autoriser une fois",
+  "Allow for session": "Autoriser pour cette session",
+  "Approval details": "Détails de l’approbation",
   "Couldn't message {name}": "Impossible d’envoyer un message à {name}",
   "Messaged": "Message envoyé à",
   "Couldn't stop {name}": "Impossible d’arrêter {name}",
@@ -10879,6 +10887,8 @@ var DE = {
   "Goal stopped": "Ziel abgebrochen",
   Reject: "Ablehnen",
   "Allow once": "Einmalig erlauben",
+  "Allow for session": "Für diese Sitzung zulassen",
+  "Approval details": "Genehmigungsdetails",
   "Couldn't message {name}": "Nachricht an {name} fehlgeschlagen",
   Messaged: "Nachricht gesendet an",
   "Couldn't stop {name}": "{name} konnte nicht gestoppt werden",
@@ -13338,6 +13348,8 @@ var ZH = {
   "Goal stopped": "目标已终止",
   Reject: "拒绝",
   "Allow once": "允许一次",
+  "Allow for session": "本次会话允许",
+  "Approval details": "审批详情",
   "Couldn't message {name}": "没能给 {name} 发消息",
   Messaged: "已发消息给",
   "Couldn't stop {name}": "没能叫停 {name}",
@@ -14848,7 +14860,8 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     answerView: (sessionId, viewId, action, values) => after(call2("view-reply", { sessionId: partFor(sessionId), viewId, action, values })),
     dismissView: (sessionId) => after(call2("dismiss-view", { sessionId: partFor(sessionId) })),
     deleteBtw: (sessionId, cardId) => after(call2("btw-delete", { sessionId, cardId })),
-    answerApproval: (id, choice) => after(call2("approval-answer", { id, choice })),
+    answerApproval: (id, choice, scope) => after(call2("approval-answer", { id, choice, ...scope ? { scope } : {} })),
+    allowApprovalForSession: (sessionId, callId) => call2("approval-allow-session", { sessionId, ...callId !== void 0 ? { callId } : {} }),
     computerSetEnabled: (enabled) => after(call2("computer-set-enabled", { enabled })),
     computerSetLevel: (botId, level) => after(call2("computer-set-level", { botId, level })),
     computerRevokeApp: (botId, appKey) => after(call2("computer-revoke-app", { botId, appKey })),
@@ -41353,9 +41366,9 @@ var stateLine = (className, at, ...what) => (0, import_react66.createElement)(
 );
 function ApprovalCard({ approval, bot, actions }) {
   const [busy, setBusy] = (0, import_react66.useState)(false);
-  const answer = (choice) => {
+  const answer = (choice, scope) => {
     setBusy(true);
-    void Promise.resolve(actions.answerApproval(approval.id, choice)).catch((error) => actions.reportError(error, "approval")).finally(() => setBusy(false));
+    void Promise.resolve(actions.answerApproval(approval.id, choice, scope)).catch((error) => actions.reportError(error, "approval")).finally(() => setBusy(false));
   };
   return (0, import_react66.createElement)(
     "div",
@@ -41370,6 +41383,7 @@ function ApprovalCard({ approval, bot, actions }) {
       "div",
       { className: "bt-mw-actions" },
       (0, import_react66.createElement)("button", { type: "button", className: "bt-q-btn", disabled: busy, onClick: () => answer("reject") }, t("Reject")),
+      approval.tool === "approve_agent_action" ? (0, import_react66.createElement)("button", { type: "button", className: "bt-q-btn", disabled: busy, onClick: () => answer("allow", "session") }, t("Allow for session")) : null,
       (0, import_react66.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: () => answer("allow") }, t("Allow once"))
     ) : (0, import_react66.createElement)(
       "div",
@@ -41377,6 +41391,72 @@ function ApprovalCard({ approval, bot, actions }) {
       (0, import_react66.createElement)("button", { type: "button", className: "bt-q-btn", onClick: () => actions.openSession(bot.id) }, t("Open {name}'s chat", { name: bot.name }))
     )
   );
+}
+function AgentApprovalFlow({ approval, sessionId, actions, resolveReason }) {
+  const [busy, setBusy] = (0, import_react66.useState)(false);
+  const raw = approval.displayReason !== void 0 && typeof resolveReason === "function" ? resolveReason(approval.displayReason) : approval.reason;
+  const text = String(raw ?? "").trim();
+  const [headline, ...rest] = text.split("\n");
+  const detail = rest.join("\n").trim();
+  const runAnswer = (send) => {
+    if (busy || approval.answerable === false) return;
+    setBusy(true);
+    void Promise.resolve(send()).catch((error) => {
+      setBusy(false);
+      actions?.reportError?.(error, "approval");
+    });
+  };
+  const allowOnce = () => runAnswer(() => approval.answer("allowed-once"));
+  const reject = () => runAnswer(() => approval.answer("rejected"));
+  const allowSession = () => runAnswer(async () => {
+    const targetSession = sessionId ?? approval.sessionId;
+    if (targetSession !== void 0 && actions?.allowApprovalForSession) {
+      await Promise.resolve(actions.allowApprovalForSession(targetSession, approval.callId)).catch(() => {
+      });
+    }
+    return approval.answer("allowed-once");
+  });
+  const onKeyDown = (event) => {
+    if (event.defaultPrevented || event.repeat || event.nativeEvent?.isComposing) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if (event.key !== "Enter" && event.key !== "Escape") return;
+    if (event.key === "Enter" && event.target?.closest?.('button, a[href], [role="button"], input, textarea, [contenteditable]')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Enter") allowOnce();
+    else reject();
+  };
+  return (0, import_react66.createElement)(
+    "div",
+    { className: "bt-approval-wrap", "data-approval-key": approval.key, "aria-busy": busy, onKeyDown },
+    (0, import_react66.createElement)(
+      "div",
+      { className: "bt-approval-card" },
+      (0, import_react66.createElement)(
+        "div",
+        { className: "bt-approval-strip" },
+        (0, import_react66.createElement)("span", { className: "bt-approval-dot", "aria-hidden": true }),
+        t("Waiting for approval")
+      ),
+      (0, import_react66.createElement)(
+        "div",
+        { className: "bt-approval-body", role: "group", "aria-label": t("Approval details"), tabIndex: 0 },
+        (0, import_react66.createElement)("div", { className: "bt-approval-title" }, headline || approval.toolName),
+        detail ? (0, import_react66.createElement)("pre", { className: "bt-approval-detail" }, detail) : null
+      ),
+      (0, import_react66.createElement)(
+        "div",
+        { className: "bt-approval-actions" },
+        (0, import_react66.createElement)("button", { type: "button", className: "bt-q-btn bt-approval-reject", disabled: busy, onClick: reject }, t("Reject")),
+        (0, import_react66.createElement)("button", { type: "button", className: "bt-q-btn", disabled: busy, onClick: allowSession }, t("Allow for session")),
+        (0, import_react66.createElement)("button", { type: "button", className: "bt-q-submit", disabled: busy, onClick: allowOnce }, t("Allow once"))
+      )
+    )
+  );
+}
+function AgentApprovalCard({ matched, sessionId, actions, resolveReason }) {
+  if (!matched) return null;
+  return (0, import_react66.createElement)(AgentApprovalFlow, { key: matched.key, approval: matched, sessionId, actions, resolveReason });
 }
 function MemberState({ entry, bot }) {
   if (entry?.state === "ask") return stateLine("bt-member-state bt-mw-ask", entry.approvals[0].at, t("Waiting for your approval"));
@@ -41461,10 +41541,20 @@ body[data-ds-dark-theme] .bt-member-state.bt-mw-ask{color:#f0b84a}
 .bt-mw-text{color:var(--bt-ink);overflow-wrap:anywhere}
 .bt-mw-reason{overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .bt-mw-code{display:block;padding:4px 8px;border-radius:6px;background:var(--bt-main);font:11px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--bt-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bt-mw-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+.bt-mw-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin-top:4px}
 .bt-mw-actions>button{height:28px;padding:0 12px;font-size:12px}
 .bt-mw-actions>button:disabled{opacity:.5;cursor:default}
-@media (prefers-reduced-motion:reduce){.bt-mw-pill,.bt-mw-face,.bt-mw-label,.bt-member,.bt-mw-card{animation:none}.bt-mw-pill{transition:background-color .12s ease}}
+.bt-approval-wrap{padding:8px calc(var(--dsh-composer-side-clearance,16px) + 16px) 12px;display:flex;flex-direction:column;align-items:center;width:100%;box-sizing:border-box}
+.bt-approval-card{width:100%;max-width:var(--dsh-chat-content-width,748px);border-radius:16px;border:1px solid color-mix(in srgb,var(--bt-warn) 36%,var(--bt-line));background:var(--bt-card);box-shadow:var(--bt-card-shadow);overflow:hidden;color:var(--bt-ink);font-family:var(--bt-font);animation:bt-q-in ${SPRING_SHAPE.duration}ms ${SPRING_SHAPE.easing} backwards,bt-veil-in .2s ease-out backwards}
+.bt-approval-strip{display:flex;align-items:center;gap:8px;padding:10px 16px;background:color-mix(in srgb,var(--bt-warn) 10%,transparent);color:var(--bt-warn);font-size:13px;line-height:18px;font-weight:500}
+.bt-approval-dot{width:8px;height:8px;border-radius:50%;corner-shape:round;background:var(--bt-warn);flex:none}
+.bt-approval-body{display:flex;flex-direction:column;gap:6px;padding:12px 16px 0;max-height:var(--dsh-composer-text-max-height,220px);overflow-y:auto;box-sizing:border-box}
+.bt-approval-title{font-size:15px;line-height:22px;font-weight:500;color:var(--bt-ink);overflow-wrap:anywhere}
+.bt-approval-detail{margin:0;padding:8px 10px;border-radius:8px;background:var(--bt-hover);color:var(--bt-ink-2);font:12px/18px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.bt-approval-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:14px 16px}
+.bt-approval-actions>button:disabled{opacity:.5;cursor:default}
+.bt-approval-reject:hover:not(:disabled){background:var(--bt-danger-soft);color:var(--bt-danger)}
+@media (prefers-reduced-motion:reduce){.bt-mw-pill,.bt-mw-face,.bt-mw-label,.bt-member,.bt-mw-card,.bt-approval-card{animation:none}.bt-mw-pill{transition:background-color .12s ease}}
 `;
 
 // src/client/task-board.js
@@ -46602,6 +46692,11 @@ function apply(ctx) {
       priority: BOT_PRIORITY,
       select: (owner) => owner.pendingInteraction?.kind === "question" ? owner.pendingInteraction : null
     }, QuestionCard),
+    () => shadow("conversation.composer", {
+      priority: BOT_PRIORITY,
+      select: (owner) => owner.pendingInteraction?.kind === "approval" && owner.pendingInteraction?.toolName === "approve_agent_action" ? owner.pendingInteraction : null,
+      inject: () => ({ ...face(), resolveReason: (reason) => ctx.locale?.resolveText?.(reason) })
+    }, AgentApprovalCard),
     () => shadow("conversation.input.dock", { id: "bot-paste", order: -130, inject: face }, PasteDock),
     () => shadow("conversation.input.dock", { id: "bot-members", order: -120, inject: face }, MemberDock),
     () => shadow("conversation.input.dock", { id: "bot-model", order: -110, inject: face }, ModelChoiceDock),

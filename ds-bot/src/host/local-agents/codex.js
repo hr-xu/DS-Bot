@@ -158,12 +158,16 @@ export class CodexEngine {
     if (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval' || method === 'execCommandApproval' || method === 'patchApproval') {
       const thread = [...this.threads.values()].find(entry => entry.threadId === params?.threadId)
       const options = (params?.availableDecisions ?? params?.decisions ?? ['accept', 'decline']).map(decision => ({ optionId: decision, kind: decision === 'accept' || decision === 'acceptForSession' ? 'allow_once' : 'reject_once', name: decision }))
+      const isCommand = method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval'
+      const command = typeof params?.command === 'string' ? params.command : Array.isArray(params?.command) ? params.command.join(' ') : undefined
       return new Promise((resolve) => {
         const reply = (decision) => resolve({ decision: decision ?? 'decline' })
         thread?.push({
           type: 'permission', id: `perm-${Math.random().toString(36).slice(2)}`, reply,
-          action: params?.reason ?? params?.command ?? 'The agent asks to run an action',
+          action: params?.reason ?? command ?? 'The agent asks to run an action',
           changes: true,
+          kind: isCommand ? 'execute' : 'edit',
+          ...(command !== undefined ? { command } : {}),
           detail: detailText(params),
           options,
         })

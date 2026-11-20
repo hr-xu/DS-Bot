@@ -56,7 +56,7 @@ import { installCommandActions } from './command-actions.js'
 import { RIGHTBAR_ATTRIBUTES, columnOpened, createSwitchWindow, drawerOpened, rightColumnOpen } from './right-panel.js'
 import { ErrorToast, FEEDBACK_CSS } from './feedback.js'
 import { ABOUT_CSS } from './about.js'
-import { MEMBER_CSS, MemberDock } from './member-status.js'
+import { MEMBER_CSS, MemberDock, AgentApprovalCard } from './member-status.js'
 import { TASK_CSS } from './task-board.js'
 import { IM_CSS } from './im-page.js'
 import { GOAL_CSS } from './goal.js'
@@ -1294,6 +1294,11 @@ export function apply(ctx) {
       priority: BOT_PRIORITY,
       select: owner => (owner.pendingInteraction?.kind === 'question' ? owner.pendingInteraction : null),
     }, QuestionCard),
+    () => shadow('conversation.composer', {
+      priority: BOT_PRIORITY,
+      select: owner => (owner.pendingInteraction?.kind === 'approval' && owner.pendingInteraction?.toolName === 'approve_agent_action' ? owner.pendingInteraction : null),
+      inject: () => ({ ...face(), resolveReason: reason => ctx.locale?.resolveText?.(reason) }),
+    }, AgentApprovalCard),
     () => shadow('conversation.input.dock', { id: 'bot-paste', order: -130, inject: face }, PasteDock),
     () => shadow('conversation.input.dock', { id: 'bot-members', order: -120, inject: face }, MemberDock),
     () => shadow('conversation.input.dock', { id: 'bot-model', order: -110, inject: face }, ModelChoiceDock),

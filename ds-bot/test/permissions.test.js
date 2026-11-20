@@ -231,3 +231,18 @@ test('a stricter preset reaches the parts opened while the Bot was busy', async 
   assert.equal(bot.permission, 'workspace-write')
   assert.deepEqual(writes, ['b1-chat=workspace-write', 'b1-bg=workspace-write', 'b1-group=workspace-write'])
 })
+
+test('setPermission and setRoomPermission notify syncLocalAgentPreset on every updated session', async () => {
+  const synced = []
+  const { rt, bots } = runtime()
+  rt.syncLocalAgentPreset = (sessionId, preset) => { synced.push([sessionId, preset]) }
+  const bot = { id: 'b1', name: 'Agy' }
+  bots.b1 = bot
+  await rt.setPermission(bot, 'danger-full-access')
+  assert.deepEqual(synced, [['b1-chat', 'danger-full-access'], ['b1-group', 'danger-full-access']])
+
+  synced.length = 0
+  const room = { id: 'r1', name: 'Ops', sessions: { b1: 's-room-1' } }
+  await rt.setRoomPermission(room, 'workspace-write')
+  assert.deepEqual(synced, [['s-room-1', 'workspace-write']])
+})
