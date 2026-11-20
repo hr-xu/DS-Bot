@@ -441,7 +441,7 @@ export class AcpEngine {
     const reply = peer.request('session/prompt', { sessionId: session.acpSessionId, prompt: acpPrompt(blocks) }, { signal, timeout: 0 })
     reply.then(
       result => { session.running = false; session.push({ type: 'done', reason: result?.stopReason ?? 'end_turn', ...(usageOf(result?.usage) ? { usage: usageOf(result.usage) } : {}) }) },
-      error => { session.running = false; session.push({ type: 'error', error }) },
+      () => { session.running = false },
     )
     return reply
   }
@@ -458,7 +458,7 @@ export class AcpEngine {
     // A loaded session may list nothing again: what this CLI listed last stands in.
     const listed = this.commands.get(session.acpSessionId) ?? [...this.commands.values()].at(-1) ?? []
     if (!listed.includes('compact')) return false
-    this.prompt(session, [{ type: 'text', text: '/compact' }], {}).catch(() => {})
+    this.prompt(session, [{ type: 'text', text: '/compact' }], {}).catch(error => session.push({ type: 'error', error }))
     return true
   }
 

@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
-import { LocalAgentAdapter } from '../src/host/local-agents/adapter.js'
+import { LocalAgentAdapter, toLlmError } from '../src/host/local-agents/adapter.js'
 import { AcpEngine, stdioBridgePath } from '../src/host/local-agents/acp.js'
 import { CodexEngine } from '../src/host/local-agents/codex.js'
-import { JsonRpcPeer, wireProcess } from '../src/host/local-agents/jsonrpc.js'
+import { JsonRpcPeer, formatErrorMessage, wireProcess } from '../src/host/local-agents/jsonrpc.js'
 import { ClaudeEngine } from '../src/host/local-agents/claude.js'
 import { LoopbackMcp, flattenSchema } from '../src/host/local-agents/mcp.js'
 import { cleanEnv } from '../src/host/local-agents/discover.js'
@@ -1696,4 +1696,205 @@ test('replay drops images outside the replay window without reading their attach
   const out = await collect(adapter.stream(options('s1', msgs, { provider: 'local-codex-cli', model: 'gpt-5.1-codex' })))
   assert.equal(out.finish?.kind, 'stop')
   assert.deepEqual(readIds, ['att-recent'])
+})
+
+test('JsonRpcPeer extracts readable messages from JSON-RPC errors without [object Object]', async () => {
+  const sendAndFail = (errorPayload) => {
+    const sent = []
+    const peer = new JsonRpcPeer(msg => sent.push(msg))
+    const pending = peer.request('session/prompt', {})
+    const id = sent[0].id
+    peer.handleLine(JSON.stringify({ jsonrpc: '2.0', id, error: errorPayload }))
+    return pending
+  }
+
+  await assert.rejects(
+    sendAndFail({ code: -32603, message: 'Internal error', data: 'upstream quota exceeded' }),
+    err => err.message === 'Internal error: upstream quota exceeded' && err.code === -32603 && err.data === 'upstream quota exceeded',
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32603, message: 'Internal error', data: { detail: 'backend unavailable' } }),
+    err => err.message === 'Internal error: backend unavailable' && err.code === -32603 && err.data?.detail === 'backend unavailable',
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32603, message: 'Internal error: already here', data: 'already here' }),
+    err => err.message === 'Internal error: already here',
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32000, message: '', data: 'session expired' }),
+    err => err.message === 'session expired' && err.code === -32000,
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32000, message: '   ' }),
+    err => err.message === 'request failed' && err.code === -32000,
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32000, message: { reason: 'malformed prompt' } }),
+    err => err.message === 'malformed prompt' && !err.message.includes('[object Object]'),
+  )
+  await assert.rejects(
+    sendAndFail({ code: -32000, message: { foo: 1 } }),
+    err => err.message === '{"foo":1}' && !err.message.includes('[object Object]'),
+  )
+  await assert.rejects(
+    sendAndFail(null),
+    err => err.message === 'request failed',
+  )
+  assert.equal(formatErrorMessage({}), 'request failed')
+})
+
+test('toLlmError safely normalizes numeric codes, empty/object messages, data details, and invalid HTTP statuses', () => {
+  // Numeric JSON-RPC codes must not crash LlmError validation; real message & data stay intact.
+  const rpcErr = toLlmError(Object.assign(new Error('Internal error'), { code: -32603, data: { detail: 'model backend crashed' } }))
+  assert.equal(rpcErr.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(rpcErr.message, 'Internal error: model backend crashed')
+  assert.equal(rpcErr.failure.status, undefined)
+
+  // error.data detail feeds classification (quota, signin, overflow).
+  const quotaErr = toLlmError(Object.assign(new Error('Internal error'), { code: -32603, data: 'rate limit exceeded' }))
+  assert.equal(quotaErr.code, 'LOCAL_AGENT_QUOTA')
+  assert.equal(quotaErr.message, 'Internal error: rate limit exceeded')
+
+  const overflowErr = toLlmError(Object.assign(new Error(''), { code: -32000, data: { detail: 'Prompt is too long' } }))
+  assert.equal(overflowErr.code, 'CONTEXT_WINDOW_EXCEEDED')
+  assert.equal(overflowErr.message, 'Prompt is too long')
+
+  // Empty code, whitespace code, empty message, null/object errors never throw or yield [object Object].
+  const emptyErr = toLlmError(Object.assign(new Error(''), { code: '', status: 0 }))
+  assert.equal(emptyErr.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(emptyErr.message, 'the local agent failed')
+  assert.equal(emptyErr.failure.status, undefined)
+
+  const blankCode = toLlmError(Object.assign(new Error('boom'), { code: '   ', status: 'failed' }))
+  assert.equal(blankCode.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(blankCode.message, 'boom')
+  assert.equal(blankCode.failure.status, undefined)
+
+  const objMsg = toLlmError({ code: -32602, message: { detail: 'bad payload' }, status: null })
+  assert.equal(objMsg.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(objMsg.message, 'bad payload')
+  assert.doesNotMatch(objMsg.message, /\[object Object\]/)
+
+  const plainObj = toLlmError({ reason: 'unexpected failure', status: 99 })
+  assert.equal(plainObj.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(plainObj.message, 'unexpected failure')
+  assert.equal(plainObj.failure.status, undefined)
+
+  const nullErr = toLlmError(null)
+  assert.equal(nullErr.code, 'LOCAL_AGENT_ERROR')
+  assert.equal(nullErr.message, 'the local agent failed')
+
+  // Valid string code and valid HTTP status (100-599) are preserved.
+  const validErr = toLlmError(Object.assign(new Error('upstream down'), { code: 'LOCAL_AGENT_MODEL', status: 503 }))
+  assert.equal(validErr.code, 'LOCAL_AGENT_MODEL')
+  assert.equal(validErr.message, 'upstream down')
+  assert.equal(validErr.failure.status, 503)
+
+  // Invalid out-of-range or non-integer statuses are dropped cleanly.
+  for (const status of [0, 99, 600, 200.5, NaN, null, '503']) {
+    const out = toLlmError(Object.assign(new Error('bad status'), { status }))
+    assert.equal(out.failure.status, undefined)
+  }
+})
+
+test('ACP session/prompt rejection surfaces once and does not poison the next turn, ask, or compact', async (t) => {
+  let promptCalls = 0
+  let nextPromptPlan = []
+  const peer = new JsonRpcPeer((msg) => {
+    if (msg.method === 'session/new') {
+      peer.handleLine(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: `acp-${msg.id}` } }))
+      peer.handleLine(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: `acp-${msg.id}`, update: { sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'compact' }] } } }))
+      return
+    }
+    if (msg.method === 'session/set_config_option' || msg.method === 'session/set_mode' || msg.method === 'session/close') {
+      peer.handleLine(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }))
+      return
+    }
+    if (msg.method === 'session/prompt') {
+      promptCalls += 1
+      const step = nextPromptPlan.shift()
+      if (step?.error !== undefined) {
+        queueMicrotask(() => peer.handleLine(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: step.error })))
+      } else if (step?.reply !== undefined) {
+        queueMicrotask(() => {
+          peer.handleLine(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: msg.params.sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: step.reply } } } }))
+          peer.handleLine(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }))
+        })
+      } else if (step?.onStart !== undefined) {
+        step.onStart()
+      }
+    }
+  })
+  const engine = new AcpEngine('local-acp-fake', { name: 'Fake ACP', kind: 'acp', command: 'fake', args: [] }, { findExecutable: () => 'fake' })
+  peer.notificationHandler = (method, params) => engine.onNotice(method, params)
+  engine.peer = peer
+  engine.ensure = async () => peer
+  engine.close = async () => {}
+
+  const records = {}
+  const adapter = new LocalAgentAdapter({
+    rt: { warn: () => {} },
+    customAgents: () => [{ id: 'fake', name: 'Fake ACP', command: 'fake', args: [] }],
+    findExecutable: path => path,
+    spawnEngine: () => engine,
+    record: sessionId => records[sessionId],
+    saveRecord: (sessionId, record) => { records[sessionId] = record },
+    presetFor: () => 'workspace-write',
+    cwdFor: async () => tmpdir(),
+    probeCwd: () => tmpdir(),
+    toolsFor: () => [],
+  })
+  adapter.ensureMcp = async () => undefined
+  t.after(() => adapter.dispose())
+
+  // Turn 1: session/prompt rejects with numeric JSON-RPC code and data detail.
+  nextPromptPlan.push({ error: { code: -32603, message: 'Internal error', data: 'backend timeout' } })
+  await assert.rejects(
+    collect(adapter.stream(options('s1', [user('m1', 'first')]))),
+    err => err.code === 'LOCAL_AGENT_ERROR' && err.message === 'Internal error: backend timeout',
+  )
+  const live = adapter.live.get('s1')
+  assert.equal(live.state, 'idle')
+  assert.equal(live.engineSession.running, false)
+  // No duplicate stale error left queued for Turn 2.
+  await new Promise(setImmediate)
+  assert.deepEqual(live.events, [])
+
+  // Turn 2 on the same session succeeds cleanly.
+  nextPromptPlan.push({ reply: 'recovered ok' })
+  const second = await collect(adapter.stream(options('s1', [user('m1', 'first'), user('m2', 'second')])))
+  assert.equal(second.text, 'recovered ok')
+  assert.equal(second.finish.kind, 'stop')
+
+  // ask() also receives a JSON-RPC rejection cleanly once.
+  nextPromptPlan.push({ error: { code: -32000, message: 'Internal error', data: 'overloaded' } })
+  await assert.rejects(
+    adapter.ask('s1', { system: 'Decide.', prompt: 'check', signal: AbortSignal.timeout(5_000) }),
+    err => err.code === 'LOCAL_AGENT_ERROR' && err.message === 'Internal error: overloaded',
+  )
+
+  // compact() still surfaces a rejected /compact prompt as an LlmError.
+  nextPromptPlan.push({ error: { code: -32603, message: 'compaction refused' } })
+  await assert.rejects(
+    adapter.compact('s1', AbortSignal.timeout(5_000)),
+    err => err.code === 'LOCAL_AGENT_ERROR' && err.message === 'compaction refused',
+  )
+
+  // Aborting an in-flight ACP prompt does not queue a stale abort error for the next turn.
+  const hung = Promise.withResolvers()
+  nextPromptPlan.push({ onStart: hung.resolve })
+  const controller = new AbortController()
+  const aborted = collect(adapter.stream(options('s1', [user('m1', 'first'), user('m2', 'second'), user('m3', 'hang')], { signal: controller.signal })))
+  await hung.promise
+  controller.abort(new Error('stopped'))
+  const abortedOut = await aborted
+  assert.equal(abortedOut.finish.kind, 'aborted')
+  await new Promise(setImmediate)
+  assert.deepEqual(live.events, [])
+
+  nextPromptPlan.push({ reply: 'after abort ok' })
+  const afterAbort = await collect(adapter.stream(options('s1', [user('m1', 'first'), user('m2', 'second'), user('m3', 'hang'), user('m4', 'go')])))
+  assert.equal(afterAbort.text, 'after abort ok')
+  assert.equal(afterAbort.finish.kind, 'stop')
+  assert.equal(promptCalls, 6)
 })

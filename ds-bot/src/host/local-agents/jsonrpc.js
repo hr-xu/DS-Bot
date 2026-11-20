@@ -3,6 +3,61 @@
 // Codex app-server engines.
 import { randomUUID } from 'node:crypto'
 
+const ERROR_DATA_KEYS = ['detail', 'details', 'message', 'error', 'reason', 'description']
+const ERROR_DATA_MAX = 500
+
+// Extracts a readable string from a JSON-RPC error payload or `error.data`,
+// never returning "[object Object]" or an empty string.
+export function describeErrorValue(value, depth = 0) {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed === '' ? undefined : trimmed.slice(0, ERROR_DATA_MAX)
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (typeof value !== 'object') return undefined
+  if (depth < 2) {
+    for (const key of ERROR_DATA_KEYS) {
+      if (!Object.hasOwn(value, key)) continue
+      const text = describeErrorValue(value[key], depth + 1)
+      if (text !== undefined) return text
+    }
+  }
+  try {
+    const json = JSON.stringify(value)
+    if (json === undefined || json === '{}' || json === '[]') return undefined
+    return json.slice(0, ERROR_DATA_MAX)
+  } catch {
+    return undefined
+  }
+}
+
+export function formatErrorMessage(error, fallback = 'request failed') {
+  if (error === undefined || error === null) return fallback
+  if (typeof error === 'string') return error.trim() || fallback
+  if (typeof error !== 'object') return String(error).trim() || fallback
+  const base = typeof error.message === 'string'
+    ? error.message.trim()
+    : (describeErrorValue(error.message) ?? '')
+  const detail = describeErrorValue(error.data)
+  if (base !== '' && detail !== undefined) {
+    return base.includes(detail) ? base : `${base}: ${detail}`
+  }
+  if (base !== '') return base
+  if (detail !== undefined) return detail
+  if (!(error instanceof Error)) {
+    for (const key of ERROR_DATA_KEYS) {
+      if (key === 'message' || !Object.hasOwn(error, key)) continue
+      const found = describeErrorValue(error[key])
+      if (found !== undefined) return found
+    }
+    const rest = Object.fromEntries(Object.entries(error).filter(([key]) => key !== 'code' && key !== 'message' && key !== 'data' && key !== 'status'))
+    const described = describeErrorValue(rest)
+    if (described !== undefined) return described
+  }
+  return fallback
+}
+
 // One wire message is one JSON value on one line.
 export class JsonRpcPeer {
   constructor(write) {
@@ -29,8 +84,14 @@ export class JsonRpcPeer {
       const call = this.pending.get(message.id)
       if (call === undefined) return
       this.pending.delete(message.id)
-      if (message.error !== undefined) call.reject(Object.assign(new Error(message.error.message ?? 'request failed'), { code: message.error.code, data: message.error.data }))
-      else call.resolve(message.result)
+      if (message.error !== undefined) {
+        const err = new Error(formatErrorMessage(message.error))
+        if (message.error !== null && typeof message.error === 'object') {
+          if (message.error.code !== undefined) err.code = message.error.code
+          if (message.error.data !== undefined) err.data = message.error.data
+        }
+        call.reject(err)
+      } else call.resolve(message.result)
       return
     }
     if (typeof message.method !== 'string') return

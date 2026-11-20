@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { LlmAdapter, LlmError, offloadedImageText, resolveImageAttachmentAccess, textOnlyImageText } from '@deepseek-ai/dsh-llm'
 import { textOf } from '../text.js'
 import { engineOf, cliMode } from './engines.js'
+import { formatErrorMessage } from './jsonrpc.js'
 import { LoopbackMcp } from './mcp.js'
 
 export const DEFAULT_CONTEXT_WINDOW = 200_000
@@ -637,7 +638,7 @@ export class LocalAgentAdapter extends LlmAdapter {
     try {
       const started = Promise.resolve(live.engine.prompt(live.engineSession, blocks, { signal, effort }))
         .then((turnId) => { if (live.spec.kind === 'codex' && turnId !== undefined) live.turnTag = turnId })
-        .catch(error => live.push({ type: 'error', error }))
+        .catch(error => { if (!signal?.aborted) live.push({ type: 'error', error }) })
       return live.spec.kind === 'acp' ? Promise.resolve() : started
     } catch (error) {
       live.push({ type: 'error', error })
@@ -723,7 +724,13 @@ export class LocalAgentAdapter extends LlmAdapter {
     else options.signal?.addEventListener('abort', onAbort)
     try {
     for (;;) {
-      const event = await Promise.race([live.next(), abortPromise]).catch(error => ({ type: 'abort', error }))
+      const next = this.take(live)
+      let event
+      try {
+        event = await Promise.race([next.event, abortPromise]).catch(error => ({ type: 'abort', error }))
+      } finally {
+        next.drop()
+      }
       if (event.type === 'abort') {
         this.stopTurn(live, 'the turn was stopped')
         yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'the turn was stopped' } } }
@@ -1155,17 +1162,19 @@ async function renderReplay(messages, system, resolveImage) {
 
 // Process exits, missing CLIs, quota and sign-in failures get typed codes so DS
 // Bot's repair card can act on them.
-function toLlmError(error, live) {
+export function toLlmError(error, live) {
   if (error instanceof LlmError) return error
-  const text = String(error?.message ?? error)
+  const text = formatErrorMessage(error, 'the local agent failed')
   // A CLI whose context is past its window: the part moves on the way an overflow does.
   const overflow = /prompt is too long|context.?(window|length).?(exceeded|is full)|context_length_exceeded|exceeds the (model's )?(maximum )?context|too many tokens/i
+  const fallbackCode = typeof error?.code === 'string' && error.code.trim() !== '' ? error.code : 'LOCAL_AGENT_ERROR'
   const code = error?.code === 'NO_ADAPTER' ? 'LOCAL_AGENT_MISSING'
     : overflow.test(text) ? 'CONTEXT_WINDOW_EXCEEDED'
       : /not signed in|not logged in|login required|unauthorized|authentication/i.test(text) ? 'LOCAL_AGENT_SIGNIN'
         : /quota|rate.?limit|usage limit|exceeded/i.test(text) ? 'LOCAL_AGENT_QUOTA'
           : /exited|spawn|ENOENT/i.test(text) ? 'LOCAL_AGENT_EXIT'
-            : error?.code ?? 'LOCAL_AGENT_ERROR'
+            : fallbackCode
   const hint = code === 'LOCAL_AGENT_SIGNIN' ? ` Sign in with: ${live?.spec?.signIn ?? `${live?.spec?.command ?? 'the CLI'} login`}.` : ''
-  return new LlmError(`${text}${hint}`, code, error?.status === undefined ? {} : { status: error.status })
+  const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? error.status : undefined
+  return new LlmError(`${text}${hint}`, code, status === undefined ? {} : { status })
 }
