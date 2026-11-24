@@ -32,8 +32,8 @@ function walk(node, found = []) {
   walk(node.props?.children, found)
   return found
 }
-function settings(bot, { main = false, rooms = [] } = {}) {
-  const roster = { mainBotIds: main ? [bot.id] : [], mainBotId: main ? bot.id : null, rooms, models: [], memory: false }
+function settings(bot, { main = false, rooms = [], permissions, models = [] } = {}) {
+  const roster = { mainBotIds: main ? [bot.id] : [], mainBotId: main ? bot.id : null, rooms, models, memory: false, ...(permissions !== undefined ? { permissions } : {}) }
   return walk(BotSettingsForm({ bot, roster, actions: {}, run: fn => fn }))
 }
 const bot = { id: 'b', name: 'Writer', role: 'Writer', instructions: '', capabilities: [] }
@@ -242,4 +242,33 @@ test('CharacterGrid stays a flat 20-button grid for legacy and aliased Bot shape
   }
   const afterUnregister = walk(CharacterGrid({ look: { shape: 'ring', color: 'blue' }, onShape() {}, onColor() {} })).filter(node => node.props?.className === 'bt-shape')
   assert.equal(afterUnregister.length, 20)
+})
+
+test('BotSettingsForm shows the Permissions card when presets are available and passes local CLI engineName', () => {
+  const catalog = {
+    defaultPreset: 'workspace-write',
+    options: [
+      { value: 'read-only', description: 'Read only' },
+      { value: 'workspace-write', description: 'Workspace' },
+      { value: 'danger-full-access', description: 'Full access' },
+    ],
+  }
+  const withoutCatalog = settings(bot)
+  const permBefore = withoutCatalog.find(node => typeof node.type === 'function' && node.type.name === 'BotPermission')
+  assert.ok(permBefore)
+  assert.equal(permBefore.type(permBefore.props), null)
+
+  const withCatalog = settings({ ...bot, engine: 'agy' }, {
+    permissions: catalog,
+    models: [{ provider: 'agy', providerName: 'Antigravity' }],
+  })
+  const permNode = withCatalog.find(node => typeof node.type === 'function' && node.type.name === 'BotPermission')
+  assert.ok(permNode)
+  const permCard = permNode.type(permNode.props)
+  assert.equal(permCard.props.title, 'Permissions')
+  const picker = walk(permCard).find(node => node.props?.catalog === catalog)
+  assert.ok(picker)
+  assert.equal(picker.props.saved, 'workspace-write')
+  assert.equal(picker.props.repick, true)
+  assert.equal(picker.props.engineName, 'Antigravity')
 })

@@ -76,6 +76,8 @@ const spawnEngine = (kind, route, spec) => (kind === 'acp' ? new AcpEngine(route
   : kind === 'codex' ? new CodexEngine(route, spec, { findExecutable })
     : new ClaudeEngine(route, spec, { findExecutable }))
 
+export const resolveLocalAgentPreset = presetOf
+
 export function install(rt, { probeSignIn: checkSignIn = probeSignIn, probeVersion: checkVersion = probeVersion, now = Date.now } = {}) {
   const { ctx, state } = rt
   const ownOf = (object, key) => (typeof rt.own === 'function'

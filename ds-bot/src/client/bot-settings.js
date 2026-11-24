@@ -12,6 +12,7 @@ import { ExtraFolders, FolderMenu } from './folder-menu.js'
 import { BotSchedules } from './schedules.js'
 import { BotCapabilitiesCard } from './capability-settings.js'
 import { BotComputerCard } from './computer.js'
+import { PermissionPicker, engineNameOf } from './permission-picker.js'
 import { AvatarLibraryPanel, avatarImage } from './avatar-library.js'
 import { useMemoryCount } from './memory-panel.js'
 import { SPRING_SHAPE, SPRING_TAP, spring, useGlide, useLinger } from './motion.js'
@@ -211,6 +212,21 @@ function MemoryCard({ bot, actions }) {
       h('span', { className: 'bt-mem-row-go' }, t('Manage'), h(ChevronRightIcon))))
 }
 
+function BotPermission({ bot, roster, save }) {
+  const catalog = roster.permissions
+  if (!catalog?.options?.length) return null
+  return h(Card, { title: t('Permissions') },
+    h('div', { className: 'bt-set-row bt-bs-row bt-bs-stack bt-gs-perm' },
+      // A Bot without its own preset may run on another one set in DSH, so its first pick always applies.
+      h(PermissionPicker, {
+        catalog,
+        saved: bot.permission ?? catalog.defaultPreset,
+        repick: bot.permission === undefined,
+        engineName: engineNameOf(bot, roster),
+        onPick: permission => save({ permission }),
+      })))
+}
+
 // A Bot's settings as grouped cards: who it is (avatar, name, label), what it runs on
 // (model), what it does (instructions), its memory and tasks, its Main Bot role, its
 // sidebar place, and copies.
@@ -276,6 +292,7 @@ export function BotSettingsForm({ bot, roster, actions, run }) {
         h(FolderMenu, { value: bot.workDir, actions, run, onPick: workDir => save({ workDir }) })),
       // A private Bot works in its own folder only; a local agent keeps its own file permissions.
       bot.private === true || bot.engine !== undefined ? null : h(ExtraFolders, { value: bot.extraDirs, actions, run, onSave: extraDirs => save({ extraDirs }) })),
+    h(BotPermission, { bot, roster, save }),
     h(ApprovalSettings, { target: bot, roster, Card }),
     h(Card, { title: t('Privacy') },
       h(SwitchRow, {

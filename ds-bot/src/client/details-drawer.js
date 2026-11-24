@@ -14,7 +14,7 @@ import { ScheduleSummary } from './schedules.js'
 import { useGlide, useMorph } from './motion.js'
 import { MemberApprovals, MemberState, StopMemberWork, StopRoomWork, useMemberWork, workState } from './member-status.js'
 import { canSetGoal, goalView, hasGoalAdmin } from './goal.js'
-import { PermissionPicker, presetDanger, presetName } from './permission-picker.js'
+import { PermissionPicker, engineNameOf, presetDanger, presetName } from './permission-picker.js'
 import { TaskBoard } from './task-board.js'
 import { DetailsTaskList, isActiveTask, taskCountsOf, tasksForChat } from './bot-tasks.js'
 import { BotConnectors } from './connectors.js'
@@ -47,7 +47,7 @@ function PermissionRow({ bot, roster, actions, run }) {
   return h('div', { className: 'bt-drawer-permission' },
     h('div', { className: 'bt-section-title' }, t('Permissions')),
     // A Bot without its own preset may run on another one set in DSH, so its first pick always applies.
-    h(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === undefined, onPick: permission => run(actions.updateBot(bot.id, { permission })) }))
+    h(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === undefined, engineName: engineNameOf(bot, roster), onPick: permission => run(actions.updateBot(bot.id, { permission })) }))
 }
 
 // The current part's turns, speed, cache hits and context, refreshed when a turn starts or ends.

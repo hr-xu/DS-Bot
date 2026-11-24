@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { install } from '../src/host/permissions.js'
+import { resolveLocalAgentPreset } from '../src/host/local-agents/index.js'
 
 const PRESETS = { 'workspace-write': {}, 'danger-full-access': {} }
 const SESSION_ONLY = ['auto']
@@ -246,4 +247,24 @@ test('a stricter preset reaches active background tasks too', async () => {
   await rt.setPermission(bot, 'workspace-write')
   assert.equal(bot.permission, 'workspace-write')
   assert.deepEqual(writes, ['b1-chat=workspace-write', 'b1-task=workspace-write', 'b1-group=workspace-write'])
+})
+
+test('local-agent presetFor respects DSH defaultPreset when neither room nor Bot overrides it', () => {
+  const bots = { b1: { id: 'b1', name: 'Agy' }, b2: { id: 'b2', name: 'Strict', permission: 'read-only' } }
+  const rooms = { r1: { id: 'r1', name: 'Ops', permission: 'read-only' }, r2: { id: 'r2', name: 'Open' } }
+  const owners = new Map([['b1-r1', { roomId: 'r1', botId: 'b1' }], ['b1-r2', { roomId: 'r2', botId: 'b1' }]])
+  const selfMap = { 'b1-chat': 'b1', 'b2-chat': 'b2', 'b1-r1': 'b1', 'b1-r2': 'b1' }
+  const rt = {
+    botOf: id => bots[id],
+    selfOf: id => selfMap[id],
+    roomOf: id => rooms[id],
+    groupOwners: owners,
+    permissionCatalog: () => ({ defaultPreset: 'danger-full-access', options: [] }),
+  }
+  assert.equal(resolveLocalAgentPreset(rt, 'b1-chat'), 'danger-full-access')
+  assert.equal(resolveLocalAgentPreset(rt, 'b2-chat'), 'read-only')
+  assert.equal(resolveLocalAgentPreset(rt, 'b1-r1'), 'read-only')
+  assert.equal(resolveLocalAgentPreset(rt, 'b1-r2'), 'danger-full-access')
+  rt.permissionCatalog = () => undefined
+  assert.equal(resolveLocalAgentPreset(rt, 'b1-chat'), 'workspace-write')
 })

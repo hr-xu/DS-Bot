@@ -37,6 +37,7 @@ const react = {
   useId: () => 'id',
   Fragment: Symbol('Fragment'),
 }
+const resetHooks = () => { cells.length = 0; prevDeps.length = 0 }
 const render = (component, props) => {
   let tree
   do {
@@ -53,9 +54,27 @@ const render = (component, props) => {
 const module = { exports: {} }
 runInNewContext(outputFiles[0].text, {
   module, exports: module.exports,
-  require: name => (name === 'react' ? react : {}),
+  setTimeout, clearTimeout,
+  window: { innerWidth: 1200, innerHeight: 800, addEventListener() {}, removeEventListener() {} },
+  require: name => (name === 'react' ? react : name === 'react-dom' ? { createPortal: node => node } : {}),
 })
-const { PermissionPicker } = module.exports
+const { PermissionPicker, BotPermissionPill } = module.exports
+
+function walk(node, found = []) {
+  if (Array.isArray(node)) { for (const child of node) walk(child, found); return found }
+  if (node === null || node === undefined || typeof node !== 'object') return found
+  found.push(node)
+  walk(node.props?.children, found)
+  return found
+}
+
+function textOf(node) {
+  if (node === null || node === undefined || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  if (typeof node === 'object') return textOf(node.props?.children)
+  return ''
+}
 
 const OPTIONS = [
   { value: 'read-only', description: 'read-only' },
@@ -68,6 +87,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve))
 // Mounts the picker on `props`; `requests` gets a deferred per `onPick` call, and
 // `maxFlying` records the most requests open at once.
 const mountPicker = (initial, repick = false) => {
+  resetHooks()
   const requests = []
   let flying = 0
   const seen = { maxFlying: 0 }
@@ -83,10 +103,12 @@ const mountPicker = (initial, repick = false) => {
   }
   let tree
   const rerender = (patch) => { props = { ...props, ...patch }; tree = render(PermissionPicker, props); return tree }
+  const buttons = () => walk(tree).filter(node => node.type === 'button')
   const picker = {
     requests, seen, rerender,
-    press(value) { tree.props.children.find(button => button.props.title === value).props.onClick(); rerender() },
-    pressed() { return tree.props.children.find(button => button.props['aria-pressed'])?.props.title },
+    tree: () => tree,
+    press(value) { buttons().find(button => button.props.title === value).props.onClick(); rerender() },
+    pressed() { return buttons().find(button => button.props['aria-pressed'])?.props.title },
     // Lets settled request continuations and their state updates land.
     async flush() { await settle(); rerender() },
   }
@@ -179,4 +201,119 @@ test('repick still lets the shown preset be picked again', async () => {
   assert.equal(picker.requests[0].value, 'read-only')
   picker.requests[0].resolve(true)
   await picker.flush()
+})
+
+test('PermissionPicker shows plain-language preset description and optional local-CLI note', () => {
+  const picker = mountPicker({ catalog: { options: OPTIONS }, saved: 'workspace-write', engineName: 'Antigravity' })
+  const nodes = walk(picker.tree())
+  const desc = nodes.find(node => node.props?.className?.includes('bt-perm-desc'))
+  const note = nodes.find(node => node.props?.className?.includes('bt-perm-cli-note'))
+  assert.equal(textOf(desc), 'Can edit files in its working folder; commands or actions outside ask first.')
+  assert.equal(textOf(note), 'Applies to Antigravity: Workspace prompts on shell commands; Full access runs without asking.')
+
+  picker.rerender({ saved: 'danger-full-access', engineName: undefined })
+  const updated = walk(picker.tree())
+  assert.equal(textOf(updated.find(node => node.props?.className?.includes('bt-perm-desc'))), 'Runs edits and commands without asking.')
+  assert.equal(updated.find(node => node.props?.className?.includes('bt-perm-cli-note')), undefined)
+})
+
+function mountPill({ sessionId, roster, locked = false }) {
+  resetHooks()
+  const calls = []
+  const actions = {
+    updateBot: (id, patch) => { calls.push(['bot', id, patch.permission]); return Promise.resolve() },
+    updateRoom: (id, patch) => { calls.push(['room', id, patch.permission]); return Promise.resolve() },
+  }
+  let currentRoster = roster
+  const useRoster = select => select(currentRoster)
+  let tree
+  const rerender = (nextRoster) => {
+    if (nextRoster !== undefined) currentRoster = nextRoster
+    tree = render(BotPermissionPill, { sessionId, locked, useRoster, actions })
+    return tree
+  }
+  rerender()
+  return {
+    calls, rerender,
+    tree: () => tree,
+    trigger: () => walk(tree).find(node => node.props?.className === 'bt-perm-pill'),
+    options: () => walk(tree).filter(node => node.props?.role === 'menuitemradio'),
+    open() { this.trigger().props.onClick(); rerender() },
+  }
+}
+
+test('BotPermissionPill switches a 1:1 Bot preset and shows local-CLI note when running on a CLI', async () => {
+  const catalog = { options: OPTIONS, defaultPreset: 'workspace-write' }
+  const bot = { id: 'b1', name: 'Agy', engine: 'agy' }
+  const roster = {
+    permissions: catalog,
+    byId: { s1: bot, b1: bot },
+    roomsById: {},
+    models: [{ provider: 'agy', providerName: 'Antigravity' }],
+  }
+  const pill = mountPill({ sessionId: 's1', roster })
+  assert.equal(textOf(pill.trigger()), 'Workspace')
+  assert.equal(pill.trigger().props['data-danger'], undefined)
+
+  pill.open()
+  const items = pill.options()
+  assert.equal(items.length, 3)
+  const note = walk(pill.tree()).find(node => node.props?.className === 'bt-perm-menu-note')
+  assert.equal(textOf(note), 'Applies to Antigravity: Workspace prompts on shell commands; Full access runs without asking.')
+
+  items[2].props.onClick()
+  pill.rerender()
+  assert.deepEqual(pill.calls, [['bot', 'b1', 'danger-full-access']])
+  assert.equal(pill.trigger().props['data-danger'], true)
+  await settle()
+})
+
+test('BotPermissionPill toggles group chats between Per member and group-wide presets', async () => {
+  const catalog = { options: OPTIONS, defaultPreset: 'workspace-write' }
+  const room = { id: 'r1', name: 'Ops' }
+  const roster = { permissions: catalog, byId: {}, roomsById: { r1: room } }
+  const pill = mountPill({ sessionId: 'r1', roster })
+  assert.equal(textOf(pill.trigger()), 'Per member')
+
+  pill.open()
+  const items = pill.options()
+  assert.equal(items.length, 4)
+  assert.equal(items[0].props['aria-checked'], true)
+
+  items[3].props.onClick()
+  pill.rerender({ ...roster, roomsById: { r1: { ...room, permission: 'danger-full-access' } } })
+  assert.deepEqual(pill.calls, [['room', 'r1', 'danger-full-access']])
+  assert.equal(textOf(pill.trigger()), 'Group · Full access')
+  assert.equal(pill.trigger().props['data-danger'], true)
+
+  pill.open()
+  pill.options()[0].props.onClick()
+  assert.deepEqual(pill.calls[1], ['room', 'r1', null])
+  await settle()
+})
+
+test('BotPermissionPill handles group member work sessions and hides for unknown sessions or empty catalogs', () => {
+  const catalog = { options: OPTIONS, defaultPreset: 'workspace-write' }
+  const bot = { id: 'b1', name: 'Ada', permission: 'read-only' }
+  const room = { id: 'r1', name: 'Ops', permission: 'danger-full-access' }
+  const inherited = mountPill({
+    sessionId: 'gs1',
+    roster: { permissions: catalog, byId: { b1: bot }, roomsById: { r1: room }, groupSessionOf: { gs1: { room, bot } } },
+  })
+  assert.equal(textOf(inherited.trigger()), 'Group · Full access')
+  inherited.open()
+  const head = walk(inherited.tree()).find(node => node.props?.className === 'bt-perm-menu-head')
+  assert.equal(textOf(head), 'Inherited from Ops')
+
+  const perMemberWork = mountPill({
+    sessionId: 'gs2',
+    roster: { permissions: catalog, byId: { b1: bot }, roomsById: { r2: { id: 'r2', name: 'Docs' } }, groupSessionOf: { gs2: { room: { id: 'r2', name: 'Docs' }, bot } } },
+  })
+  assert.equal(textOf(perMemberWork.trigger()), 'Read only')
+
+  const unknown = mountPill({ sessionId: 'other', roster: { permissions: catalog, byId: {}, roomsById: {} } })
+  assert.equal(unknown.tree(), null)
+
+  const noCatalog = mountPill({ sessionId: 'b1', roster: { permissions: { options: [] }, byId: { b1: bot }, roomsById: {} } })
+  assert.equal(noCatalog.tree(), null)
 })
