@@ -843,12 +843,17 @@ export function install(rt) {
             const readOnly = rt.readOnly()
             if (readOnly !== undefined) return fail(readOnly, 'bot/read-only')
           }
-          await rt.answerApproval(body.id, body.choice)
+          await rt.answerApproval(body.id, body.choice, { scope: body.scope === 'session' ? 'session' : undefined })
           return ok(true)
         case 'pause-member-work':
           return ok(await rt.pauseMemberWork(String(body.roomId ?? ''), String(body.botId ?? '')))
         case 'resume-member-work':
           return ok(await rt.resumeMemberWork(String(body.roomId ?? ''), String(body.botId ?? ''), typeof body.note === 'string' ? body.note : undefined))
+        case 'approval-allow-session': {
+          const sessionId = String(body.sessionId ?? '')
+          if (sessionId === '' || rt.selfOf(sessionId) === undefined) return fail('Unknown session', 'bot/not-found')
+          return ok(rt.allowLocalAgentForSession?.(sessionId, body.callId === undefined ? undefined : String(body.callId)) === true)
+        }
         // A stop that fails partway still parks the goal, or it wakes the admin again.
         case 'stop-member-work':
           try {

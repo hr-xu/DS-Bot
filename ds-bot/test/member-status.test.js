@@ -22,7 +22,7 @@ runInNewContext(bundle.outputFiles[0].text, {
     return platform[name]
   },
 })
-const { busyMembers, summaryText, MemberDock, MemberState, StopMemberWork, StopRoomWork, memberWork, roomApprovals } = module.exports
+const { busyMembers, summaryText, MemberDock, MemberState, MemberApprovals, AgentApprovalCard, StopMemberWork, StopRoomWork, memberWork, roomApprovals } = module.exports
 // Values from the bundle's realm compare by content only.
 const plain = value => JSON.parse(JSON.stringify(value))
 // The dock's capsule in an element tree.
@@ -204,4 +204,61 @@ test('roomApprovals combines this group\'s tool approvals and computer app asks 
   assert.ok(capsule)
   capsule.props.onClick()
   assert.deepEqual(calls, [['approval', 'r1']])
+})
+
+function expand(node, found = []) {
+  if (node === null || node === undefined || typeof node !== 'object') return found
+  if (Array.isArray(node)) { for (const child of node) expand(child, found); return found }
+  if (typeof node.type === 'function') return expand(node.type(node.props), found)
+  found.push(node)
+  expand(node.children, found)
+  return found
+}
+
+test('MemberApprovals shows Allow for session only for approve_agent_action approvals', async () => {
+  const answers = []
+  const actions = { answerApproval: (id, choice, scope) => { answers.push([id, choice, scope]); return Promise.resolve() }, reportError() {} }
+  const bot = { id: 'a', name: 'Agy' }
+
+  const agentTree = expand(MemberApprovals({
+    entry: { state: 'ask', approvals: [{ id: 'ap1', roomId: 'r1', answerable: true, tool: 'approve_agent_action', reason: 'Run `npm test`' }] },
+    bot,
+    actions,
+  }))
+  const agentButtons = agentTree.filter(node => node.type === 'button')
+  assert.deepEqual(agentButtons.map(button => button.children.join('')), ['Reject', 'Allow for session', 'Allow once'])
+  agentButtons[1].props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(answers, [['ap1', 'allow', 'session']])
+
+  const regularTree = expand(MemberApprovals({
+    entry: { state: 'ask', approvals: [{ id: 'ap2', roomId: 'r1', answerable: true, tool: 'pwsh', reason: 'Run command' }] },
+    bot,
+    actions,
+  }))
+  const regularButtons = regularTree.filter(node => node.type === 'button')
+  assert.deepEqual(regularButtons.map(button => button.children.join('')), ['Reject', 'Allow once'])
+})
+
+test('AgentApprovalCard supports Reject, Allow for session, and Allow once in 1:1 chats', async () => {
+  const log = []
+  const matched = {
+    key: 'approval:1',
+    sessionId: 's1',
+    toolName: 'approve_agent_action',
+    callId: 'c1',
+    reason: 'Run `npm test`\ncwd: /repo',
+    answerable: true,
+    answer: outcome => { log.push(['answer', outcome]); return Promise.resolve() },
+  }
+  const actions = {
+    allowApprovalForSession: (sessionId, callId) => { log.push(['session', sessionId, callId]); return Promise.resolve(true) },
+    reportError() {},
+  }
+  const buttons = expand(AgentApprovalCard({ matched, sessionId: 's1', actions })).filter(node => node.type === 'button')
+  assert.deepEqual(buttons.map(button => button.children.join('')), ['Reject', 'Allow for session', 'Allow once'])
+
+  buttons[1].props.onClick()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(log, [['session', 's1', 'c1'], ['answer', 'allowed-once']])
 })

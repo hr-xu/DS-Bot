@@ -1270,6 +1270,8 @@ export const JA = {
   "Goal stopped": "目標を終了しました",
   "Reject": "拒否",
   "Allow once": "今回のみ許可",
+  "Allow for session": "このセッション中許可",
+  "Approval details": "承認の詳細",
   "Couldn't message {name}": "{name} にメッセージを送信できませんでした",
   "Messaged": "送信先:",
   "Couldn't stop {name}": "{name} を停止できませんでした",

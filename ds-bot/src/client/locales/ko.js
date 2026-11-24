@@ -1282,6 +1282,8 @@ export const KO = {
   'Goal stopped': '목표 종료됨',
   Reject: '거절',
   'Allow once': '한 번만 허용',
+  'Allow for session': '이번 세션에서 허용',
+  'Approval details': '승인 세부 정보',
   "Couldn't message {name}": '{name}에게 메시지를 보내지 못했습니다',
   Messaged: '메시지 전송됨:',
   "Couldn't stop {name}": '{name}을(를) 중지하지 못했습니다',

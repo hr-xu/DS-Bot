@@ -40,6 +40,7 @@ export function install(rt) {
         ctx.get('approval').setPolicy(agent, 'ask')
       } else presets().set(agent.session, wanted)
       if (rt.state?.approvalPolicies) delete rt.state.approvalPolicies[sessionId]
+      void Promise.resolve(rt.syncLocalAgentPreset?.(sessionId, wanted === 'review' ? 'workspace-write' : wanted)).catch(() => {})
     }
     return wanted
   }

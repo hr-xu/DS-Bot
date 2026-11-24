@@ -1282,6 +1282,8 @@ export const DE = {
   'Goal stopped': 'Ziel abgebrochen',
   Reject: 'Ablehnen',
   'Allow once': 'Einmalig erlauben',
+  'Allow for session': 'Für diese Sitzung zulassen',
+  'Approval details': 'Genehmigungsdetails',
   "Couldn't message {name}": 'Nachricht an {name} fehlgeschlagen',
   Messaged: 'Nachricht gesendet an',
   "Couldn't stop {name}": '{name} konnte nicht gestoppt werden',

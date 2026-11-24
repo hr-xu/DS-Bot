@@ -1270,6 +1270,8 @@ export const FR = {
   "Goal stopped": "Objectif arrêté",
   "Reject": "Refuser",
   "Allow once": "Autoriser une fois",
+  "Allow for session": "Autoriser pour cette session",
+  "Approval details": "Détails de l’approbation",
   "Couldn't message {name}": "Impossible d’envoyer un message à {name}",
   "Messaged": "Message envoyé à",
   "Couldn't stop {name}": "Impossible d’arrêter {name}",

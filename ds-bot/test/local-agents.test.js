@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
-import { LocalAgentAdapter } from '../src/host/local-agents/adapter.js'
+import { LocalAgentAdapter, sessionAllowKey } from '../src/host/local-agents/adapter.js'
 import { AcpEngine, stdioBridgePath } from '../src/host/local-agents/acp.js'
 import { CodexEngine, unwrapShellCommand } from '../src/host/local-agents/codex.js'
 import { JsonRpcPeer, wireProcess } from '../src/host/local-agents/jsonrpc.js'
@@ -19,6 +19,7 @@ import { AGENT_BADGES, agentAvatar, badgeOf, isLocalRoute } from '../src/client/
 import { INKS } from '../src/client/inks.js'
 import { install as partsInstall } from '../src/host/parts.js'
 import { install as modelsInstall } from '../src/host/models.js'
+import { install as approvalsInstall } from '../src/host/approvals.js'
 import { fakeContext } from './fake-ctx.js'
 
 const FIXTURE = name => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))
@@ -2990,4 +2991,136 @@ test('failed CLI resume preserves a >2000-char request followed by a clock messa
   const maintCodexCalls = readFileSync(maintCodexRecord, 'utf8').trim().split('\n').map(line => JSON.parse(line))
   assert.equal(maintCodexCalls.filter(call => call.method === 'thread/resume').length, 1, 'Codex maintenance must attempt thread/resume')
   assert.equal(maintCodexCalls.filter(call => call.method === 'thread/start').length, 0, 'failed Codex maintenance resume must not spawn an orphan thread/start')
+})
+
+test('sessionAllowKey groups safe repeated prompts and isolates chained or delete actions', () => {
+  assert.equal(sessionAllowKey({ kind: 'execute', command: 'npm test' }), 'execute:npm')
+  assert.equal(sessionAllowKey({ kind: 'execute', command: 'NODE_ENV=test /usr/local/bin/npm run lint' }), 'execute:npm')
+  assert.equal(sessionAllowKey({ kind: 'execute', command: 'npm test && rm -rf /tmp/x' }), 'execute:npm+rm')
+  assert.notEqual(sessionAllowKey({ kind: 'execute', command: 'npm test && rm -rf /tmp/x' }), 'execute:npm')
+  assert.equal(sessionAllowKey({ kind: 'execute', command: 'echo $(whoami)' }), 'execute:raw:echo $(whoami)')
+  assert.equal(sessionAllowKey({ kind: 'edit', action: 'Edit src/a.js' }), 'edit')
+  assert.equal(sessionAllowKey({ kind: 'read', action: 'Read /etc/hosts' }), 'read')
+  assert.notEqual(sessionAllowKey({ kind: 'delete', action: 'Delete a.txt' }), sessionAllowKey({ kind: 'delete', action: 'Delete b.txt' }))
+})
+
+test('syncPreset updates active ACP mode immediately and clears sessionAllows when tightened', async (t) => {
+  const setCalls = []
+  const fakeEngine = {
+    async open() { return { acpSessionId: 'acp-1', dead: false, modes: [{ id: 'read-only' }, { id: 'workspace' }, { id: 'bypass' }], next: () => new Promise(() => {}) } },
+    async setOption(_session, category, value) {
+      setCalls.push([category, value])
+      if (value === 'fail') throw new Error('boom')
+    },
+    forget() {},
+    async close() {},
+  }
+  const adapter = new LocalAgentAdapter({
+    rt: { warn() {} },
+    customAgents: () => [{ id: 'sync', name: 'Sync ACP', command: 'x', args: [] }],
+    findExecutable: p => p,
+    spawnEngine: () => fakeEngine,
+    record: () => undefined,
+    saveRecord() {},
+    presetFor: () => 'workspace-write',
+    cwdFor: async () => '/tmp',
+    probeCwd: () => '/tmp',
+    toolsFor: () => [],
+  })
+  t.after(() => adapter.dispose())
+
+  const live = await adapter.liveFor({ sessionId: 's-sync', provider: 'local-acp-sync', model: 'default' }, 'workspace-write')
+  live.engineSession = await fakeEngine.open()
+  live.sessionAllows.add('execute:npm')
+
+  // Widening keeps sessionAllows and pushes the new ACP mode immediately.
+  await adapter.syncPreset('s-sync', 'danger-full-access')
+  assert.equal(live.preset, 'danger-full-access')
+  assert.equal(live.sessionAllows.has('execute:npm'), true)
+  assert.deepEqual(setCalls, [['mode', 'bypass']])
+
+  // Tightening clears in-memory sessionAllows and pushes the stricter ACP mode.
+  await adapter.syncPreset('s-sync', 'read-only')
+  assert.equal(live.preset, 'read-only')
+  assert.equal(live.sessionAllows.size, 0)
+  assert.deepEqual(setCalls, [['mode', 'bypass'], ['mode', 'read-only']])
+})
+
+test('rememberSessionAllow auto-allows matching prompts in the same session, prompts for others, and clears on close', async (t) => {
+  const adapter = new LocalAgentAdapter({
+    rt: { warn() {} },
+    customAgents: () => [{ id: 'perm', name: 'Perm ACP', command: 'x', args: [] }],
+    findExecutable: p => p,
+    spawnEngine: () => ({ forget() {}, async close() {} }),
+    record: () => undefined,
+    saveRecord() {},
+    presetFor: () => 'workspace-write',
+    cwdFor: async () => '/tmp',
+    probeCwd: () => '/tmp',
+    toolsFor: () => [],
+  })
+  t.after(() => adapter.dispose())
+
+  const live = await adapter.liveFor({ sessionId: 's-perm', provider: 'local-acp-perm', model: 'default' }, 'workspace-write')
+  const replies = []
+  const opts = [{ optionId: 'allow-1', kind: 'allow_once', name: 'Allow' }, { optionId: 'deny-1', kind: 'reject_once', name: 'Deny' }]
+  const ac = new AbortController()
+
+  // 1. First `npm test` prompts via approve_agent_action.
+  live.push({ type: 'permission', id: 'p1', kind: 'execute', command: 'npm test', action: 'Run `npm test`', detail: '', changes: true, options: opts, reply: v => replies.push(['p1', v]) })
+  const first = await collect(adapter.drain(live, { signal: ac.signal }))
+  assert.equal(first.finish?.kind, 'tool-calls')
+  assert.equal(first.calls[0].name, 'approve_agent_action')
+  assert.equal(first.calls[0].id, 'p1')
+
+  // Record "Allow for session" and resolve p1 as allowed.
+  assert.equal(adapter.rememberSessionAllow('s-perm', 'p1'), true)
+  live.pending.get('p1').resolve({ text: JSON.stringify({ decision: 'allow' }) })
+  live.pending.delete('p1')
+  assert.deepEqual(replies, [['p1', 'allow-1']])
+
+  // 2. Subsequent `npm run lint` auto-allows without suspending; different command (`git push`) still prompts!
+  live.push({ type: 'permission', id: 'p2', kind: 'execute', command: 'npm run lint', action: 'Run `npm run lint`', detail: '', changes: true, options: opts, reply: v => replies.push(['p2', v]) })
+  live.push({ type: 'permission', id: 'p3', kind: 'execute', command: 'git push', action: 'Run `git push`', detail: '', changes: true, options: opts, reply: v => replies.push(['p3', v]) })
+  const second = await collect(adapter.drain(live, { signal: ac.signal }))
+  assert.deepEqual(replies, [['p1', 'allow-1'], ['p2', 'allow-1']])
+  assert.equal(second.finish?.kind, 'tool-calls')
+  assert.equal(second.calls[0].id, 'p3')
+
+  // 3. Closing the live session clears in-memory sessionAllows.
+  await adapter.closeLive(live)
+  assert.equal(live.sessionAllows.size, 0)
+  const fresh = await adapter.liveFor({ sessionId: 's-perm', provider: 'local-acp-perm', model: 'default' }, 'workspace-write')
+  assert.equal(fresh.sessionAllows.size, 0)
+})
+
+test('answerApproval with scope=session records session allow only for approve_agent_action allow', async () => {
+  let handler
+  const remembered = []
+  const rt = {
+    ctx: { on: (event, fn) => { if (event === 'approval/request') handler = fn } },
+    groupOwners: new Map([['gs1', { roomId: 'r1', botId: 'b1' }]]),
+    chatOwners: new Map(),
+    roomOf: () => undefined,
+    botOf: () => undefined,
+    allowLocalAgentForSession: (sessionId, callId) => remembered.push([sessionId, callId]),
+    warn() {},
+  }
+  approvalsInstall(rt)
+
+  // approve_agent_action + allow + scope=session records the rule and answers allowed-once.
+  const firstOutcome = handler({ agent: { session: { id: 'gs1' } }, toolName: 'approve_agent_action', callId: 'call-1', reason: 'Run `npm test`' }, () => 'rejected')
+  const [first] = rt.approvalsView()
+  rt.answerApproval(first.id, 'allow', { scope: 'session' })
+  assert.equal(await firstOutcome, 'allowed-once')
+  assert.deepEqual(remembered, [['gs1', 'call-1']])
+
+  // Rejecting or answering another tool with scope=session does NOT record a session rule.
+  const secondOutcome = handler({ agent: { session: { id: 'gs1' } }, toolName: 'approve_agent_action', callId: 'call-2', reason: 'Run `rm`' }, () => 'rejected')
+  rt.answerApproval(rt.approvalsView()[0].id, 'reject', { scope: 'session' })
+  assert.equal(await secondOutcome, 'rejected')
+  const thirdOutcome = handler({ agent: { session: { id: 'gs1' } }, toolName: 'pwsh', callId: 'call-3', reason: 'Other tool' }, () => 'rejected')
+  rt.answerApproval(rt.approvalsView()[0].id, 'allow', { scope: 'session' })
+  assert.equal(await thirdOutcome, 'allowed-once')
+  assert.deepEqual(remembered, [['gs1', 'call-1']])
 })

@@ -169,11 +169,11 @@ const cardHead = (bot, at, label) => h('div', { className: 'bt-mw-head' },
 export function ApprovalCard({ approval, bot, actions, showBot = false, readOnly = false }) {
   const [busy, setBusy] = useState(false)
   const canAlways = Boolean(approval.alwaysAllow) && !readOnly
-  const answer = (choice) => {
+  const answer = (choice, scope) => {
     if (busy || readOnly) return
     if (choice === 'always' && !canAlways) return
     setBusy(true)
-    void Promise.resolve(actions.answerApproval(approval.id, choice))
+    void Promise.resolve(actions.answerApproval(approval.id, choice, scope))
       .catch(error => actions.reportError(error, 'approval'))
       .finally(() => setBusy(false))
   }
@@ -193,6 +193,9 @@ export function ApprovalCard({ approval, bot, actions, showBot = false, readOnly
     approval.answerable
       ? h('div', { className: 'bt-mw-actions' },
         h('button', { type: 'button', className: 'bt-q-btn', disabled: busy || readOnly, onClick: () => answer('reject') }, t('Reject')),
+        approval.tool === 'approve_agent_action'
+          ? h('button', { type: 'button', className: 'bt-q-btn', disabled: busy || readOnly, onClick: () => answer('allow', 'session') }, t('Allow for session'))
+          : null,
         h('button', { type: 'button', className: 'bt-q-submit', disabled: busy || readOnly, onClick: () => answer('allow') }, t('Allow once')),
         canAlways
           ? h('button', { type: 'button', className: 'bt-q-btn', disabled: busy || readOnly, onClick: () => answer('always') }, t('Always allow'))
@@ -217,6 +220,63 @@ export function ComputerAppApprovalCard({ ask, bot, actions, showBot = false }) 
       h('button', { type: 'button', className: 'bt-q-btn', disabled: busy, onClick: () => answer('deny') }, t('Deny')),
       h('button', { type: 'button', className: 'bt-q-btn', disabled: busy, onClick: () => answer('once') }, t('This time')),
       h('button', { type: 'button', className: 'bt-q-submit', disabled: busy, onClick: () => answer('always') }, t('Always'))))
+}
+
+// 1:1 composer takeover for local-agent CLI permission prompts (`approve_agent_action`),
+// adding an in-memory "Allow for session" button alongside Reject and Allow once while
+// leaving all other DSH approvals to DSH's own ApprovalPanel.
+function AgentApprovalFlow({ approval, sessionId, actions, resolveReason }) {
+  const [busy, setBusy] = useState(false)
+  const raw = approval.displayReason !== undefined && typeof resolveReason === 'function'
+    ? resolveReason(approval.displayReason)
+    : approval.reason
+  const text = String(raw ?? '').trim()
+  const [headline, ...rest] = text.split('\n')
+  const detail = rest.join('\n').trim()
+  const runAnswer = (send) => {
+    if (busy || approval.answerable === false) return
+    setBusy(true)
+    void Promise.resolve(send()).catch((error) => {
+      setBusy(false)
+      actions?.reportError?.(error, 'approval')
+    })
+  }
+  const allowOnce = () => runAnswer(() => approval.answer('allowed-once'))
+  const reject = () => runAnswer(() => approval.answer('rejected'))
+  const allowSession = () => runAnswer(async () => {
+    const targetSession = sessionId ?? approval.sessionId
+    if (targetSession !== undefined && actions?.allowApprovalForSession) {
+      await Promise.resolve(actions.allowApprovalForSession(targetSession, approval.callId)).catch(() => {})
+    }
+    return approval.answer('allowed-once')
+  })
+  const onKeyDown = (event) => {
+    if (event.defaultPrevented || event.repeat || event.nativeEvent?.isComposing) return
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+    if (event.key !== 'Enter' && event.key !== 'Escape') return
+    if (event.key === 'Enter' && event.target?.closest?.('button, a[href], [role="button"], input, textarea, [contenteditable]')) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Enter') allowOnce()
+    else reject()
+  }
+  return h('div', { className: 'bt-approval-wrap', 'data-approval-key': approval.key, 'aria-busy': busy, onKeyDown },
+    h('div', { className: 'bt-approval-card' },
+      h('div', { className: 'bt-approval-strip' },
+        h('span', { className: 'bt-approval-dot', 'aria-hidden': true }),
+        t('Waiting for approval')),
+      h('div', { className: 'bt-approval-body', role: 'group', 'aria-label': t('Approval details'), tabIndex: 0 },
+        h('div', { className: 'bt-approval-title' }, headline || approval.toolName),
+        detail ? h('pre', { className: 'bt-approval-detail' }, detail) : null),
+      h('div', { className: 'bt-approval-actions' },
+        h('button', { type: 'button', className: 'bt-q-btn bt-approval-reject', disabled: busy, onClick: reject }, t('Reject')),
+        h('button', { type: 'button', className: 'bt-q-btn', disabled: busy, onClick: allowSession }, t('Allow for session')),
+        h('button', { type: 'button', className: 'bt-q-submit', disabled: busy, onClick: allowOnce }, t('Allow once')))))
+}
+
+export function AgentApprovalCard({ matched, sessionId, actions, resolveReason }) {
+  if (!matched) return null
+  return h(AgentApprovalFlow, { key: matched.key, approval: matched, sessionId, actions, resolveReason })
 }
 
 // A member's second line in the group's details: what it is doing here, or its role.
@@ -371,8 +431,18 @@ export const MEMBER_CSS = `
 .bt-mw-reason{overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .bt-mw-code{display:block;padding:4px 8px;border-radius:6px;background:var(--bt-main);font:11px/16px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--bt-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-mw-scope{padding:5px 8px;border-radius:8px;background:color-mix(in srgb,var(--bt-accent) 8%,transparent);font-size:11.5px;line-height:16px;color:var(--bt-ink-2);overflow-wrap:anywhere}
-.bt-mw-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+.bt-mw-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin-top:4px}
 .bt-mw-actions>button{height:28px;padding:0 12px;font-size:12px}
 .bt-mw-actions>button:disabled{opacity:.5;cursor:default}
-@media (prefers-reduced-motion:reduce){.bt-mw-pill,.bt-mw-dock[data-leaving] .bt-mw-pill,.bt-mw-face,.bt-mw-label,.bt-member,.bt-mw-card{animation:none}.bt-mw-pill{transition:background-color .12s ease}.bt-member-stop{transition:opacity .12s ease,background-color .12s ease,color .12s ease}}
+.bt-approval-wrap{padding:8px calc(var(--dsh-composer-side-clearance,16px) + 16px) 12px;display:flex;flex-direction:column;align-items:center;width:100%;box-sizing:border-box}
+.bt-approval-card{width:100%;max-width:var(--dsh-chat-content-width,748px);border-radius:16px;border:1px solid color-mix(in srgb,var(--bt-warn) 36%,var(--bt-line));background:var(--bt-card);box-shadow:var(--bt-card-shadow);overflow:hidden;color:var(--bt-ink);font-family:var(--bt-font);animation:bt-q-in ${SPRING_SHAPE.duration}ms ${SPRING_SHAPE.easing} backwards,bt-veil-in .2s ease-out backwards}
+.bt-approval-strip{display:flex;align-items:center;gap:8px;padding:10px 16px;background:color-mix(in srgb,var(--bt-warn) 10%,transparent);color:var(--bt-warn);font-size:13px;line-height:18px;font-weight:500}
+.bt-approval-dot{width:8px;height:8px;border-radius:50%;corner-shape:round;background:var(--bt-warn);flex:none}
+.bt-approval-body{display:flex;flex-direction:column;gap:6px;padding:12px 16px 0;max-height:var(--dsh-composer-text-max-height,220px);overflow-y:auto;box-sizing:border-box}
+.bt-approval-title{font-size:15px;line-height:22px;font-weight:500;color:var(--bt-ink);overflow-wrap:anywhere}
+.bt-approval-detail{margin:0;padding:8px 10px;border-radius:8px;background:var(--bt-hover);color:var(--bt-ink-2);font:12px/18px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.bt-approval-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:14px 16px}
+.bt-approval-actions>button:disabled{opacity:.5;cursor:default}
+.bt-approval-reject:hover:not(:disabled){background:var(--bt-danger-soft);color:var(--bt-danger)}
+@media (prefers-reduced-motion:reduce){.bt-mw-pill,.bt-mw-dock[data-leaving] .bt-mw-pill,.bt-mw-face,.bt-mw-label,.bt-member,.bt-mw-card,.bt-approval-card{animation:none}.bt-mw-pill{transition:background-color .12s ease}.bt-member-stop{transition:opacity .12s ease,background-color .12s ease,color .12s ease}}
 `

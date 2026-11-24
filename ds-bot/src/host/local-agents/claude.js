@@ -265,6 +265,12 @@ class ClaudeSession {
         const request = event.request ?? {}
         if (request.subtype === 'can_use_tool') {
           const tool = request.tool_name ?? 'tool'
+          const command = typeof request.input?.command === 'string' ? request.input.command : undefined
+          const kind = tool === 'Bash' || command !== undefined ? 'execute'
+            : tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit' || tool === 'NotebookEdit' ? 'edit'
+              : READ_TOOLS.has(tool) ? 'read'
+                : tool === 'WebFetch' || tool === 'WebSearch' ? 'fetch'
+                  : String(tool).toLowerCase()
           this.emit({
             type: 'permission', id: event.request_id, cwd: this.cwd,
             reply: (optionId) => {
@@ -277,6 +283,8 @@ class ClaudeSession {
             action: `Run ${tool}`,
             detail: JSON.stringify(request),
             changes: !READ_TOOLS.has(tool),
+            kind,
+            ...(command !== undefined ? { command } : {}),
             options: [{ optionId: 'allow', kind: 'allow_once', name: 'Allow' }, { optionId: 'deny', kind: 'reject_once', name: 'Deny' }],
           })
         }

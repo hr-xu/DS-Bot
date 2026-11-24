@@ -206,6 +206,7 @@ export function install(rt) {
       ...(owner.botId !== undefined ? { botId: owner.botId } : {}),
       ...(owner.roomId ? { roomId: owner.roomId } : {}),
       ...(owner.taskId ? { taskId: owner.taskId, ...(owner.taskTitle ? { taskTitle: owner.taskTitle } : {}) } : {}),
+      ...(request.callId !== undefined ? { callId: request.callId } : {}),
       tool: String(request.toolName ?? ''), reason: String(request.reason ?? '').slice(0, 500),
       ...(displayReason ? { displayReason } : {}),
       ...(request.privacy === true ? { privacy: true } : {}),
@@ -352,7 +353,7 @@ export function install(rt) {
   const approvalById = id => pending.get(String(id ?? ''))
   const approvalReviewsView = () => rt.state.approvalReviews ?? []
   const waitsForApproval = sessionId => [...pending.values()].some(entry => entry.sessionId === sessionId)
-  function answerApproval(id, choice) {
+  function answerApproval(id, choice, { scope } = {}) {
     const entry = pending.get(String(id ?? ''))
     if (!entry?.answer) throw Object.assign(new Error('This approval is no longer open'), { code: 'bot/stale' })
     if (choice === 'always') {
@@ -401,7 +402,11 @@ export function install(rt) {
     }
     if (!Object.hasOwn(OUTCOMES, choice)) throw Object.assign(new Error('Choose allow or reject'), { code: 'bot/invalid' })
     if (entry.answering) throw Object.assign(new Error('This approval is no longer open'), { code: 'bot/stale' })
-    entry.answer(OUTCOMES[choice])
+    const outcome = OUTCOMES[choice]
+    if (outcome === 'allowed-once' && scope === 'session' && entry.tool === 'approve_agent_action') {
+      rt.allowLocalAgentForSession?.(entry.sessionId, entry.callId)
+    }
+    entry.answer(outcome)
   }
   const cancelApprovals = sessionId => {
     for (const entry of pending.values()) {
