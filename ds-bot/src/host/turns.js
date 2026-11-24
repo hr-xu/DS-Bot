@@ -1499,6 +1499,14 @@ export function install(rt) {
             const images = content.filter(block => block?.type === 'image' && !block.offloaded).map(block => block.attachment)
             const files = content.filter(block => block?.type === 'file' && block.attachment !== undefined).map(block => block.attachment)
             queueRoomMessage(rt.roomOf(id).id, { text: textOf(event.data.content), ...(images.length > 0 ? { images } : {}), ...(files.length > 0 ? { files } : {}), ...(viaOf(source) ? { via: viaOf(source) } : {}) })
+          } else if (rt.groupOwners.has(id) && source.kind === 'user') {
+            const groupOwner = rt.groupOwners.get(id)
+            if (entry.turn !== undefined && entry.info === undefined && !opened) {
+              entry.info = { kind: 'user', role: 'user-steer', roomId: groupOwner.roomId }
+            } else if (entry.turn === undefined && entry.pending === undefined && entry.carry === undefined) {
+              entry.pending = { kind: 'user', role: 'user-steer', roomId: groupOwner.roomId }
+            }
+            rt.noteGroupMemberInput?.(id, textOf(event.data.content), viaOf(source))
           }
           const own = rt.chatOwners.get(id)
           if (own !== undefined && !rt.taskOwners?.has(id)) {
@@ -1846,13 +1854,21 @@ export function install(rt) {
           } else {
             rt.clearGroupPresented?.(id)
           }
+          if (!stopped && reason?.kind === 'aborted' && reason?.reason?.kind === 'user') {
+            void rt.noteGroupUserAbort?.(id)?.catch(error => rt.warn('ds-bot: group abort cleanup for %s failed: %s', id, error))
+          }
         } else if (!retry && speaksInGroup(id, info)) {
           // A turn that failed before it took any input (DSH can turn it down before its
           // first step) never names its call, so the call waiting on this Session fails.
           const inRound = failure !== undefined && info === undefined && rt.failRoomTurn?.(id, failure) === true
           if (failure !== undefined) { if (!inRound) void rt.lateRoomFailure?.(id, info ?? {}, failure) }
           else if (reason?.kind !== 'aborted') void rt.lateRoomReply?.(id, info ?? {}, groupReply(), { shown, toolCount: workToolCount, turn, joined: joined.map(item => item.info) })
-          else rt.clearGroupPresented?.(id)
+          else {
+            rt.clearGroupPresented?.(id)
+            if (reason?.reason?.kind === 'user') {
+              void rt.noteGroupUserAbort?.(id)?.catch(error => rt.warn('ds-bot: group abort cleanup for %s failed: %s', id, error))
+            }
+          }
         } else if (!retry && info !== undefined) {
           finish(info, replyText())
         }

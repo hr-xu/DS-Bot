@@ -15,14 +15,27 @@ const LOADING_REFUSAL = 'DS Bot is still loading this chat.'
 export function sideSurface(roster, sessionId) {
   if (!roster?.ready) return 'unknown'
   if (roster.roomsById?.[sessionId]) return 'group'
-  if (roster.byId?.[sessionId]) return 'bot'
+  if (roster.byId?.[sessionId] || roster.groupSessionOf?.[sessionId]) return 'bot'
   return 'other'
 }
 
-// A Bot's side chats, as the team state carries them.
-export function sideChatsOf(roster, botId) {
+// A Bot's side chats in the active scope (private chat when roomId is undefined,
+// or a specific group's working session when roomId is given).
+export function sideChatsOf(roster, botId, roomId) {
   const chats = roster?.sideChats?.[botId]
-  return Array.isArray(chats) ? chats : []
+  if (!Array.isArray(chats)) return []
+  return chats.filter(chat => (chat?.roomId ?? undefined) === roomId)
+}
+
+export function roomSideChats(roster, roomId) {
+  const all = []
+  for (const [botId, list] of Object.entries(roster?.sideChats ?? {})) {
+    if (!Array.isArray(list)) continue
+    for (const chat of list) {
+      if (chat?.roomId === roomId) all.push({ ...chat, botId })
+    }
+  }
+  return all
 }
 
 // The leading token, or null when the line is not a `/side` command.

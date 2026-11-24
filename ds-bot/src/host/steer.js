@@ -56,7 +56,10 @@ export function install(rt) {
   if (typeof ctx.inject === 'function') ctx.inject(['jobs'], attachJobs)
   else if (ctx.get?.('jobs') !== undefined) attachJobs({ jobs: ctx.get('jobs'), effect: (execute, label) => ctx.effect(execute, label) })
 
-  const privateOf = (sessionId) => sessionId !== undefined && rt.chatOwners.has(sessionId) && !rt.groupOwners.has(sessionId)
+  const steerable = (sessionId) => sessionId !== undefined && (
+    (rt.chatOwners.has(sessionId) && !rt.groupOwners.has(sessionId))
+    || rt.groupOwners.has(sessionId)
+  )
   const liveAgent = (sessionId) => ctx.get('agents')?.get(sessionId)
 
   // Per-session state kept by the session/event listener below.
@@ -89,10 +92,12 @@ export function install(rt) {
   }
 
   const isActiveForeground = (id, agent = liveAgent(id)) => {
-    if (id === undefined || rt.readOnly?.() !== undefined || !privateOf(id)) return false
+    if (id === undefined || rt.readOnly?.() !== undefined || !steerable(id)) return false
     if (rt.taskOwners?.has(id)) return false
-    const botId = rt.chatOwners.get(id)
-    if (botId === undefined || (typeof rt.chatOf === 'function' && rt.chatOf(botId) !== id)) return false
+    if (!rt.groupOwners.has(id)) {
+      const botId = rt.chatOwners.get(id)
+      if (botId === undefined || (typeof rt.chatOf === 'function' && rt.chatOf(botId) !== id)) return false
+    }
     if (agent !== undefined && liveAgent(id) !== agent) return false
     return true
   }
@@ -137,12 +142,14 @@ export function install(rt) {
     const agent = liveAgent(id)
     if (entry === undefined || agent === undefined || !isActiveForeground(id, agent)) return
     if (rt.isLocalCliSession?.(id)) return
-    const botId = rt.chatOwners.get(id)
+    const groupOwner = rt.groupOwners.get(id)
+    const botId = rt.chatOwners.get(id) ?? groupOwner?.botId
+    const roomId = groupOwner?.roomId
     const activeInfo = entry.info ?? entry.claimed?.find(item => item?.silent !== true)
-    if (rt.isHiddenBotWorkTurn?.(botId, activeInfo)) return
-    if (rt.isHandingOff?.(id) || rt.mustIsolateHiddenWork?.(rt.botOf(botId), id)) return
+    if (groupOwner === undefined && rt.isHiddenBotWorkTurn?.(botId, activeInfo)) return
+    if (rt.isHandingOff?.(id) || (groupOwner === undefined && rt.mustIsolateHiddenWork?.(rt.botOf(botId), id))) return
     if (rt.waitsForApproval?.(id)) return
-    if ([...(rt.switchJobs?.() ?? [])].some(job => job?.botId === botId && job.roomId === undefined)) return
+    if ([...(rt.switchJobs?.() ?? [])].some(job => job?.botId === botId && job.roomId === roomId)) return
     const track = stateOf(id)
     if (track.phase !== 'model' || track.cutting || track.folding) return
     if (entry.turn === undefined || (entry.calls?.size ?? 0) > 0 || agent.status !== 'running') return
@@ -447,7 +454,7 @@ export function install(rt) {
 
   const executeShell = async (def, name, args, exec) => {
     const sessionId = exec.agent?.id
-    const waitMs = rt.backgroundWaitMs?.()
+    const waitMs = !rt.groupOwners.has(sessionId) ? rt.backgroundWaitMs?.() : Infinity
     const capacity = hasJobCapacity(sessionId)
 
     // 0s setting: hand off directly to DSH's native run_in_background path
@@ -606,7 +613,7 @@ export function install(rt) {
     if (args === null || typeof args !== 'object' || Array.isArray(args)) return next()
     const sessionId = exec.agent?.id
     if (args.run_in_background === true || jobs === undefined || sessionId === undefined
-      || !privateOf(sessionId) || rt.taskOwners?.has(sessionId)) return next()
+      || !steerable(sessionId) || rt.taskOwners?.has(sessionId)) return next()
     if (exec.signal?.aborted) return next()
 
     const callerTimeout = args.timeoutMs
@@ -693,7 +700,8 @@ export function install(rt) {
       else map.delete(key)
     }
     const trackable = (id) => {
-      if (id === undefined || rt.readOnly?.() !== undefined || !privateOf(id) || rt.taskOwners?.has(id) || rt.isLocalCliSession?.(id)) return false
+      if (id === undefined || rt.readOnly?.() !== undefined || !steerable(id) || rt.taskOwners?.has(id) || rt.isLocalCliSession?.(id)) return false
+      if (rt.groupOwners.has(id)) return true
       const botId = rt.chatOwners.get(id)
       return botId !== undefined && (typeof rt.chatOf !== 'function' || rt.chatOf(botId) === id)
     }
@@ -757,7 +765,7 @@ export function install(rt) {
   ctx.on('agent/assistant-stream', ({ agent, frame } = {}) => {
     if (frame?.type !== 'start') return
     const id = agent?.id ?? agent?.session?.id
-    if (id === undefined || !privateOf(id) || liveAgent(id) !== agent) return
+    if (id === undefined || !steerable(id) || liveAgent(id) !== agent) return
     const track = stateOf(id)
     track.phase = 'model'
     if ((agent?.inbox?.nextStep ?? []).some(message => message?.source?.kind === 'user')) scheduleCut(id)
@@ -765,7 +773,7 @@ export function install(rt) {
 
   ctx.on('session/event', (session, event) => {
     const id = session?.id
-    if (id === undefined || !privateOf(id)) return
+    if (id === undefined || !steerable(id)) return
     const track = stateOf(id)
     switch (event.type) {
       case 'step/start':

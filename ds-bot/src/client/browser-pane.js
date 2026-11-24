@@ -15,7 +15,7 @@ import { FLIGHT_ENDS, INTENT_MS, createFlight, flightEnd, flightStart, planFligh
 import { DetailsDrawer } from './details-drawer.js'
 import { SideChatView } from './side-chat.js'
 import { TaskReaderView } from './bot-tasks.js'
-import { panelHasStrip, sideChatsOf, stripMenuKeys } from './side-model.js'
+import { panelHasStrip, roomSideChats, sideChatsOf, stripMenuKeys } from './side-model.js'
 import { FolderIcon, SideIcon, TerminalIcon } from './icons.js'
 import { ImportCard, ImportMenu, PreviewCard, RemoteDebugCard, SafariPermissionCard, orderImportSources, siteMatchesHost, useCookieImportFlow } from './cookie-import-ui.js'
 import { t } from './i18n.js'
@@ -711,7 +711,8 @@ export function BrowserView({ bot, ownerId, tabId, leaving, landed, actions, use
  */
 export function BotPanel({ pane, current, leaving, room, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, workspace, SessionProvider, renderSlot }) {
   const subjectRoom = roster.roomsById?.[pane.id]
-  const bot = roster.byId[pane.id] ?? roster.groupSessionOf?.[pane.id]?.bot
+  const groupWork = roster.groupSessionOf?.[pane.id]
+  const bot = roster.byId[pane.id] ?? groupWork?.bot
   const subjectId = bot?.id ?? subjectRoom?.id ?? pane.id
   const hasSubjectDetails = Boolean(bot || subjectRoom)
   const ownerKey = subjectRoom ? `room:${subjectRoom.id}` : bot ? `bot:${bot.id}` : null
@@ -723,10 +724,11 @@ export function BotPanel({ pane, current, leaving, room, overlay, roster, action
   const activeWsTab = wsTabs.find(tab => tab.id === workspace?.active)
   const browserOwner = bot ? bot.id : (!hasSubjectDetails && workspace?.browserId ? workspace.browserId : null)
   const canBrowse = Boolean(browserOwner && roster.browser === true && actions.browserShow)
-  const sideChats = bot ? sideChatsOf(roster, bot.id) : []
+  const sideChats = subjectRoom ? roomSideChats(roster, subjectRoom.id) : bot ? sideChatsOf(roster, bot.id, groupWork?.room.id) : []
   const sideChat = sideChats.find(chat => chat?.id === pane.side)
   const taskBot = pane.task?.botId ? roster.byId?.[pane.task.botId] : undefined
   const taskEntry = taskBot && pane.task?.taskId ? (taskBot.tasks ?? []).find(item => item?.id === pane.task.taskId) : undefined
+  const sideSubject = sideChat?.botId && subjectRoom ? (subjectRoom.memberSessions?.[sideChat.botId] ?? pane.id) : pane.id
   const view = pane.view === 'browser' && canBrowse ? 'browser'
     : pane.view === 'side' && sideChat !== undefined ? 'side'
       : pane.view === 'work' && activeWork !== null ? 'work'
@@ -991,7 +993,7 @@ export function BotPanel({ pane, current, leaving, room, overlay, roster, action
     hasStrip ? h(PanelStrip, {
       bot, roomSubject: subjectRoom, subjectRoom, roster, subject: pane.id, browserOwner, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, task: taskEntry, works: workIds, work: activeWork, activeWorkInfo,
       workspace, hasSubjectDetails: hasSubjectDetails || workspace === undefined,
-      canBrowse, canSide: !subjectRoom && Boolean(bot), reading, onView: switchView, actions: panelActions, useBrowserPages,
+      canBrowse, canSide: (!subjectRoom && Boolean(bot)) || view === 'work', reading, onView: switchView, actions: panelActions, useBrowserPages,
     }) : null,
     hasWs
       ? h('div', { key: 'workspace', className: 'bt-panel-view bt-panel-workspace', hidden: view !== 'workspace' },
@@ -1004,7 +1006,7 @@ export function BotPanel({ pane, current, leaving, room, overlay, roster, action
         : view === 'work' && activeWork && activeWorkInfo
           ? h(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions })
         : view === 'side' && sideChat
-          ? h('div', { key: `side:${sideChat.id}`, className: 'bt-panel-view' }, h(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions }))
+          ? h('div', { key: `side:${sideChat.id}`, className: 'bt-panel-view' }, h(SideChatView, { subject: sideSubject, chat: sideChat, roster, actions: panelActions }))
           : view === 'task' && taskEntry && taskBot
             ? h('div', { key: `task:${taskEntry.id}`, className: 'bt-panel-view' }, h(TaskReaderView, { bot: taskBot, task: taskEntry, actions: panelActions }))
             : (hasSubjectDetails || workspace === undefined)

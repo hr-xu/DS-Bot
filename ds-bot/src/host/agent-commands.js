@@ -32,7 +32,7 @@ export function install(rt) {
   const botChat = sessionId => Object.values(rt.state?.bots ?? {}).some(bot => rt.chatOf?.(bot.id) === sessionId)
   const roomChat = sessionId => rt.roomOf?.(sessionId) !== undefined
     || Object.values(rt.state?.rooms ?? {}).some(room => rt.sessionOfRoom?.(room) === sessionId)
-  const covered = sessionId => rt.chatOwners?.has?.(sessionId) === true || roomChat(sessionId) || botChat(sessionId)
+  const covered = sessionId => rt.chatOwners?.has?.(sessionId) === true || rt.groupOwners?.has?.(sessionId) === true || roomChat(sessionId) || botChat(sessionId)
   const isGroup = sessionId => roomChat(sessionId)
   const refusal = (sessionId, name) => {
     const where = isGroup(sessionId) ? 'a group chat' : "a Bot's chat"

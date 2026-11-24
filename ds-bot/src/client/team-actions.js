@@ -42,7 +42,20 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
   }
   // The panel on a side chat's view, on the chat the strip tab or menu named.
   const openSideChat = (sessionId, chatId) => {
-    ui.set(state => ({ ...state, details: sessionId, view: 'side', side: chatId ?? null, renaming: false, tab: null, panelYield: yieldTo(state, 'side') }))
+    ui.set((state) => {
+      const snap = roster.getSnapshot()
+      const groupWork = snap?.groupSessionOf?.[sessionId]
+      const keepRoom = groupWork !== undefined && state.details !== null && snap?.roomsById?.[state.details]?.id === groupWork.room.id
+      return {
+        ...state,
+        details: keepRoom ? state.details : sessionId,
+        view: 'side',
+        side: chatId ?? null,
+        renaming: false,
+        tab: null,
+        panelYield: yieldTo(state, 'side'),
+      }
+    })
   }
   // `id` opens one Bot (page 'bots') or one group chat (page 'groups').
   const openSettings = (page = 'general', id = null) => { ui.set(state => ({ ...state, settings: { page, id }, menu: null, palette: null, newChat: null })) }
@@ -140,13 +153,18 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
           if (state.rightPanel !== undefined) return { ...state, details: null, view: 'details', task: null, renaming: false, tab: null, side: null }
         }
         if (subjectOf(snap, state.details) === subjectOf(snap, id)) return { ...state, details: id }
-        const ownerBot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot
+        const nextRoom = snap.roomsById?.[id]
+        const groupWork = snap.groupSessionOf?.[id]
+        const ownerBot = snap.byId[id] ?? groupWork?.bot
         const nextKey = workKeyOf(snap, id)
         const nextWorks = nextKey ? (state.works?.[nextKey] ?? []) : []
+        const hasSide = nextRoom
+          ? Object.values(snap.sideChats ?? {}).some(list => Array.isArray(list) && list.some(chat => chat?.id === state.side && chat?.roomId === nextRoom.id))
+          : (snap.sideChats?.[ownerBot?.id] ?? []).some(chat => chat?.id === state.side && (chat?.roomId ?? undefined) === groupWork?.room.id)
         const view = state.view === 'workspace'
           ? (state.rightPanel !== undefined && !hasWorkspace ? 'details' : 'workspace')
           : state.view === 'browser' && ownerBot === undefined ? 'details'
-            : state.view === 'side' && !(snap.sideChats?.[ownerBot?.id] ?? []).some(chat => chat?.id === state.side) ? 'details'
+            : state.view === 'side' && !hasSide ? 'details'
               : state.view === 'task' ? 'details'
                 : state.view === 'work' && (!state.work || state.work === id || !nextWorks.includes(state.work) || snap.groupSessionOf?.[state.work] === undefined) ? 'details'
                 : state.view

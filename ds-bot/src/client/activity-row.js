@@ -167,7 +167,7 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   const [movingBg, setMovingBg] = useState(false)
   useEffect(() => { setMovingBg(false) }, [sessionId, bgInfo?.turn])
   const pendingInput = useSession(snapshot => freshInputAt(snapshot?.pendingSubmissions, steeredAt))
-  const bot = roster.byId[sessionId]
+  const bot = roster.byId[sessionId] ?? roster.groupSessionOf?.[sessionId]?.bot
   const room = roster.roomsById[sessionId]
   // The one switch the row names: a working-folder move jumps the chat to a fresh
   // part while a turn is not running, so without it the conversation just empties.

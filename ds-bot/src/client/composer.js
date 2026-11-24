@@ -304,7 +304,8 @@ export function ComposerPlus({ sessionId, inputActions, useInput, useRoster, use
   // handler while `ready` re-renders only when steerability flips.
   const inputNow = useRef(undefined)
   const ready = useInput?.((state) => { inputNow.current = state; return steerable(state) }) === true && enterToSend
-  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id ?? groupWork?.bot?.id
   useEffect(() => {
     if (!open) return undefined
     const onDown = (event) => { if (![button.current, menu.current].some(node => node?.contains(event.target))) setOpen(null) }

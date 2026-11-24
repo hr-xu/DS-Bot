@@ -262,12 +262,39 @@ export function install(rt) {
     }
   }
 
-  const newChat = botId => ({ id: randomUUID(), botId, createdAt: Date.now(), updatedAt: Date.now(), entries: [] })
+  function locateSide(rtInstance, raw, groupError) {
+    const past = rtInstance.pastOwners.get(raw)
+    if (rtInstance.roomOf(raw) !== undefined || (past !== undefined && past.botId === undefined && past.roomId !== undefined)) {
+      throw new Error(groupError)
+    }
+    const activeGroup = rtInstance.groupOwners.get(raw)
+    if (activeGroup !== undefined) {
+      const { botId, roomId } = activeGroup
+      if (rtInstance.botOf(botId) === undefined || rtInstance.roomOf(roomId) === undefined) throw new Error('Unknown Bot')
+      return { sessionId: raw, botId, roomId }
+    }
+    if (past?.botId !== undefined && past.roomId !== undefined) {
+      const room = rtInstance.roomOf(past.roomId)
+      const sessionId = room?.sessions?.[past.botId]
+      if (rtInstance.botOf(past.botId) === undefined || room === undefined || sessionId === undefined) throw new Error('Unknown Bot')
+      return { sessionId, botId: past.botId, roomId: past.roomId }
+    }
+    return { ...locatePrivate(rtInstance, raw, groupError), roomId: undefined }
+  }
+
+  const newChat = (botId, roomId) => ({
+    id: randomUUID(),
+    botId,
+    ...(roomId ? { roomId } : {}),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    entries: [],
+  })
 
   async function sideNew({ sessionId: raw }) {
-    const { botId } = locatePrivate(rt, raw, GROUP_REFUSAL)
+    const { botId, roomId } = locateSide(rt, raw, GROUP_REFUSAL)
     const list = await readBot(botId)
-    const chat = newChat(botId)
+    const chat = newChat(botId, roomId)
     list.push(chat)
     await persist(botId)
     return { chatId: chat.id }
@@ -276,17 +303,18 @@ export function install(rt) {
   async function sideAsk({ sessionId: raw, chatId, recent, text }) {
     const question = typeof text === 'string' ? text : ''
     if (question.trim() === '') throw Object.assign(new Error('Write a question.'), { code: 'bot/invalid' })
-    const { sessionId, botId } = locatePrivate(rt, raw, GROUP_REFUSAL)
+    const { sessionId, botId, roomId } = locateSide(rt, raw, GROUP_REFUSAL)
+    const sameScope = item => (item?.roomId ?? undefined) === roomId
     const list = await readBot(botId)
     let chat
     if (typeof chatId === 'string' && chatId !== '') {
-      chat = list.find(item => item.id === chatId)
+      chat = list.find(item => item.id === chatId && sameScope(item))
       if (chat === undefined) throw new Error(CHAT_ERROR)
       if (answering(chat)) throw new Error(BUSY_ERROR)
     } else if (recent === true) {
-      // `/side` reuses the freshest chat whose last entry is not still answering.
+      // `/side` reuses the freshest chat of the same scope whose last entry is not still answering.
       chat = [...list]
-        .filter(item => item.entries?.at(-1)?.status !== 'answering')
+        .filter(item => sameScope(item) && item.entries?.at(-1)?.status !== 'answering')
         .sort((a, b) => (b?.updatedAt ?? 0) - (a?.updatedAt ?? 0))[0]
     }
     const id = randomUUID()
@@ -301,7 +329,7 @@ export function install(rt) {
       const route = snapshot.header?.config
       if (!route?.provider || !route?.model) throw new Error('This Bot has not called a model yet. Send a normal message first.')
       if (chat === undefined) {
-        chat = newChat(botId)
+        chat = newChat(botId, roomId)
         list.push(chat)
         created = true
       }
@@ -396,6 +424,29 @@ export function install(rt) {
 
   // Channel can be installed without the roster (the thinking route test).
   rt.onBotDelete?.(dropBot)
+
+  async function dropRoom(roomId) {
+    for (const [botId, list] of chats) {
+      const doomed = list.filter(chat => chat?.roomId === roomId)
+      if (doomed.length === 0) continue
+      const ids = doomed.flatMap(chat => (chat.entries ?? []).filter(entry => entry?.status === 'answering').map(entry => entry.id))
+      for (const id of ids) flights.get(id)?.controller.abort()
+      await drain(ids)
+      const current = chats.get(botId)
+      if (current !== undefined) {
+        chats.set(botId, current.filter(chat => chat?.roomId !== roomId))
+        await writeBot(botId).catch(() => {})
+      }
+    }
+  }
+
+  if (typeof rt.deleteRoom === 'function') {
+    const originalDeleteRoom = rt.deleteRoom.bind(rt)
+    rt.deleteRoom = async (id) => {
+      if (rt.roomOf(id) !== undefined) await dropRoom(id)
+      return originalDeleteRoom(id)
+    }
+  }
 
   const sideJoin = id => flights.get(id)?.done ?? Promise.resolve()
 

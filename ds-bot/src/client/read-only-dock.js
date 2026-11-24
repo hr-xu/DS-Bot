@@ -14,16 +14,17 @@ export function ReadOnlyDock({ sessionId, useSessions = useDefaultMain, useUi, u
   const bot = useRoster(state => state.byId?.[sessionId] ?? Object.values(state.byId ?? {}).find(entry => entry?.sessionId === sessionId))
   const running = useRoster(state => state.partsRunning?.[sessionId] === true)
   const inMain = useSessions(list => (list.byId?.[sessionId]?.retainedBy?.mainView ?? 0) > 0)
-  const active = groupWork !== undefined || (readOnlyPart !== null && readOnlyPart === sessionId && running)
+  const blocksInput = readOnlyPart !== null && readOnlyPart === sessionId && running
+  const active = groupWork !== undefined || blocksInput
   const root = useRef(null)
   // The part goes idle: what kept the input off is over.
   useEffect(() => {
     if (readOnlyPart !== null && readOnlyPart === sessionId && !running) actions.clearReadOnlyPart?.()
   }, [readOnlyPart, sessionId, running])
   // DSH owns the composer, so a switched-in running session blocks its two send paths
-  // here: Enter and the send button.
+  // here: Enter and the send button. Group working sessions stay open for in-place steering.
   useEffect(() => {
-    if (!active) return undefined
+    if (!blocksInput) return undefined
     const card = root.current?.closest('[data-conversation-content]')?.querySelector('[data-composer-card]')
       ?? root.current?.closest('[data-composer-card]')
       ?? document.querySelector('[data-composer-card]')
@@ -48,7 +49,7 @@ export function ReadOnlyDock({ sessionId, useSessions = useDefaultMain, useUi, u
       card.removeEventListener('keydown', onKey, true)
       card.removeEventListener('click', onClick, true)
     }
-  }, [active])
+  }, [blocksInput])
   if (groupWork !== undefined) {
     return h('div', { ref: root, className: 'bt-work-dock', hidden: !inMain ? true : undefined, role: 'status' },
       inMain
