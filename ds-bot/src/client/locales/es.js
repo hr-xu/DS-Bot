@@ -2922,6 +2922,10 @@ export const ES = {
   "No new replies": "No hay respuestas nuevas",
   "New replies": "Respuestas nuevas",
   "Filter by Bot or group chat": "Filtrar por Bot o chat de grupo",
+  "Running command": "Ejecutando acción",
+  "Running {count} steps": "Ejecutando {count} pasos",
+  "Ran 1 step": "1 paso ejecutado",
+  "Ran {count} steps": "{count} pasos ejecutados",
 }
 
 export const HOST_ERRORS_ES = [

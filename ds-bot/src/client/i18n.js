@@ -2699,6 +2699,10 @@ const ZH = {
   "No new replies": "没有新回复",
   "New replies": "新回复",
   "Filter by Bot or group chat": "按 Bot 或群聊筛选",
+  "Running command": "正在执行操作",
+  "Running {count} steps": "正在执行 {count} 步操作",
+  "Ran 1 step": "已执行 1 步操作",
+  "Ran {count} steps": "已执行 {count} 步操作",
 }
 
 // Host errors stay English, since Bots read them too; they are translated where the

@@ -2888,6 +2888,10 @@ export const JA = {
   "No new replies": "新しい返信はありません",
   "New replies": "新しい返信",
   "Filter by Bot or group chat": "Bot またはグループチャットで絞り込む",
+  "Running command": "操作を実行中",
+  "Running {count} steps": "{count} ステップを実行中",
+  "Ran 1 step": "1 ステップを実行しました",
+  "Ran {count} steps": "{count} ステップを実行しました",
 }
 
 export const HOST_ERRORS_JA = [

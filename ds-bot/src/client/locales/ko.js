@@ -2922,6 +2922,10 @@ export const KO = {
   "No new replies": "새 답장이 없습니다",
   "New replies": "새 답장",
   "Filter by Bot or group chat": "Bot 또는 그룹 채팅으로 필터",
+  "Running command": "작업 실행 중",
+  "Running {count} steps": "{count}단계 실행 중",
+  "Ran 1 step": "1단계 실행됨",
+  "Ran {count} steps": "{count}단계 실행됨",
 }
 
 export const HOST_ERRORS_KO = [
