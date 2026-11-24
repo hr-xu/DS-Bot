@@ -4204,7 +4204,7 @@ export function install(rt) {
         else if (reply?.handoff !== undefined) stamp(event, { kind: 'answer', text: replyText(text), handoff: reply.handoff, time: event.time })
         else if (reply?.views !== undefined) stamp(event, { kind: 'answer', text: replyText(text), views: reply.views, answers: reply.answers, time: event.time })
       } else if (source?.kind === SOURCE_KIND && source.role === 'post') {
-        if (source.resumedPause === true || source.failed !== undefined || source.resumed === true || source.stopped === true || source.done === true) continue
+        if (source.resumedPause === true || source.failed !== undefined || source.resumed === true || source.stopped === true || source.memberPaused === true || source.memberResumed === true || source.done === true) continue
         // A group's own Session reads as one conversation: member posts are its
         // messages. A post past what a message holds came as a file, with its start.
         const content = Array.isArray(event.data.content) ? event.data.content : []

@@ -44,7 +44,9 @@ export function memberWork(room, work = NO_WORK, computer = NO_COMPUTER) {
     const local = here.find(entry => entry.botId === id)
     const doing = local ? { ...local, roomId: room.id } : undefined
     const waiting = approvals.length > 0 || computerAsks.length > 0
-    return { id, approvals, computerAsks, doing, here: local !== undefined, state: waiting ? 'ask' : doing ? 'work' : 'idle' }
+    const held = room.heldMembers?.[id]
+    const state = waiting ? 'ask' : held ? 'paused' : doing ? 'work' : 'idle'
+    return { id, approvals, computerAsks, doing, held, here: local !== undefined || held !== undefined, state }
   })
 }
 
@@ -222,6 +224,10 @@ export function MemberState({ entry, bot }) {
   if (entry?.state === 'ask') {
     const at = entry.approvals?.[0]?.at ?? entry.computerAsks?.[0]?.at
     return stateLine('bt-member-state bt-mw-ask', at, t('Waiting for your approval'))
+  }
+  if (entry?.state === 'paused') {
+    const label = entry.held?.parked > 0 ? t('Paused · {count} waiting', { count: entry.held.parked }) : t('Paused')
+    return stateLine('bt-member-state', entry.held?.at, label)
   }
   if (entry?.state !== 'work') return bot.role ? stateLine('bt-member-state', undefined, bot.role) : null
   return stateLine('bt-member-state', entry.doing.since, h(Shimmer, null, `${workPhrase(entry.doing)}…`))

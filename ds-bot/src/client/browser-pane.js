@@ -335,7 +335,7 @@ export function PanelStrip({ bot, roomSubject, subjectRoom = roomSubject, roster
             onAuxClick: (event) => { if (event.button === 1) { event.preventDefault(); actions.closePanelWork(subject, workId) } },
           },
             subjectRoom
-              ? h(BotMark, { bot: info.bot, size: 18, state: roster.partsRunning?.[workId] ? 'working' : 'idle' })
+              ? h(BotMark, { bot: info.bot, size: 18, state: info.room.heldMembers?.[info.bot.id] ? 'alert' : roster.partsRunning?.[workId] ? 'working' : 'idle' })
               : h(RoomAvatar, { room: info.room, roster, size: 18 }),
             h('span', { className: 'bt-ptab-title' }, label)),
           h('button', {

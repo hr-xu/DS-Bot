@@ -1086,8 +1086,8 @@ export function TriggerCell({ node, sessionId, openFile, useRoster, useSessions,
         // A post logged into a running round already shows there, not again as a trigger.
         if (source.logged !== undefined) return null
         // A member's late failure, its work picked up after a restart, its work the user
-        // stopped, the end of its work, or a user-continued pause shows as an event of the round.
-        if (source.failed !== undefined || source.resumed === true || source.stopped === true || source.done === true || source.resumedPause === true) return null
+        // stopped, paused, resumed, the end of its work, or a user-continued pause shows as an event of the round.
+        if (source.failed !== undefined || source.resumed === true || source.stopped === true || source.memberPaused === true || source.memberResumed === true || source.done === true || source.resumedPause === true) return null
         const room = roster.roomsById[sessionId]
         const poster = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t('a Bot'), color: 'gray' }
         // A post past what a message holds came as a file, with its start only.
@@ -1431,6 +1431,12 @@ function RelayEvent({ reply, bot, room, sessionId, actions, latestPaused = false
   }
   if (reply.kind === 'stopped') {
     return h('div', { className: 'bt-event' }, t("You stopped {name}'s work", { name: bot.name }))
+  }
+  if (reply.kind === 'member-paused') {
+    return h('div', { className: 'bt-event' }, t("You paused {name}'s work", { name: bot.name }))
+  }
+  if (reply.kind === 'member-resumed') {
+    return h('div', { className: 'bt-event' }, t("You resumed {name}'s work", { name: bot.name }))
   }
   if (reply.kind === 'done') {
     const line = h('div', { className: 'bt-event' }, t('{name} finished its work', { name: bot.name }))

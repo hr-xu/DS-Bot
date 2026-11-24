@@ -3,6 +3,12 @@ import { t } from './i18n.js'
 
 const BackMiniIcon = () => h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
   h('path', { d: 'M9.8 3.8L5.5 8l4.3 4.2' }))
+const PauseMiniIcon = () => h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', 'aria-hidden': true },
+  h('path', { d: 'M5.5 3.5v9M10.5 3.5v9' }))
+const PlayMiniIcon = () => h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'currentColor', 'aria-hidden': true },
+  h('path', { d: 'M5.2 3.6l7.2 4.4-7.2 4.4V3.6z' }))
+const StopMiniIcon = () => h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'currentColor', 'aria-hidden': true },
+  h('rect', { x: 4, y: 4, width: 8, height: 8, rx: 1.8 }))
 
 // Above the composer: the part the user opened is still running in the background, so
 // this chat takes no input until that turn ends or the user stops it. Two sessions
@@ -51,7 +57,35 @@ export function ReadOnlyDock({ sessionId, useSessions = useDefaultMain, useUi, u
     }
   }, [blocksInput])
   if (groupWork !== undefined) {
-    return h('div', { ref: root, className: 'bt-work-dock', hidden: !inMain ? true : undefined, role: 'status' },
+    const held = groupWork.room.heldMembers?.[groupWork.bot.id]
+    const paused = Boolean(held)
+    const parkedCount = Number(held?.parked ?? 0)
+    const canPause = !paused && running && Boolean(actions.pauseMemberWork)
+    const showDock = paused || canPause || inMain
+    const pausedLabel = parkedCount > 0
+      ? t('Paused · {count} waiting', { count: parkedCount })
+      : (inMain ? t('Paused in {name}', { name: groupWork.room.name }) : t('Paused'))
+    return h('div', { ref: root, className: 'bt-work-dock', hidden: !showDock ? true : undefined, role: 'status' },
+      paused
+        ? h('span', { className: 'bt-work-pill', 'data-tone': 'warn' },
+            h('span', { className: 'bt-work-dot', 'aria-hidden': true }),
+            h('span', null, pausedLabel))
+        : null,
+      paused && actions.resumeMemberWork
+        ? h('button', { type: 'button', className: 'bt-work-pill', 'data-tone': 'accent', onClick: () => actions.resumeMemberWork(groupWork.room.id, groupWork.bot.id) },
+            h(PlayMiniIcon),
+            h('span', null, t('Resume')))
+        : null,
+      paused
+        ? h('button', { type: 'button', className: 'bt-work-pill', onClick: () => actions.stopMemberWork(groupWork.room.id, groupWork.bot.id) },
+            h(StopMiniIcon),
+            h('span', null, t('Stop')))
+        : null,
+      canPause
+        ? h('button', { type: 'button', className: 'bt-work-pill', onClick: () => actions.pauseMemberWork(groupWork.room.id, groupWork.bot.id) },
+            h(PauseMiniIcon),
+            h('span', null, t('Pause')))
+        : null,
       inMain
         ? h('button', { type: 'button', className: 'bt-work-pill bt-work-back', onClick: () => actions.openSession(groupWork.room.id) },
             h(BackMiniIcon),

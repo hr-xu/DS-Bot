@@ -1395,6 +1395,8 @@ export function install(rt) {
             ...(source.resumedPause ? { resumedPause: true } : {}),
             ...(source.again ? { again: true } : {}),
             ...(source.stopped ? { stopped: true } : {}),
+            ...(source.memberPaused ? { memberPaused: true } : {}),
+            ...(source.memberResumed ? { memberResumed: true } : {}),
             ...(source.done ? { done: true } : {}),
             ...(source.askedBy ? { askedBy: source.askedBy } : {}),
             ...(source.batch ? { batch: source.batch } : {}),

@@ -174,12 +174,13 @@ export function install(rt) {
     // `sessionId` is the group's own Session's current part, `ownParts` its earlier
     // ones; `parts` the members' hidden group Sessions and their earlier segments,
     // for usage.
-    rooms: Object.values(state.rooms).map(({ log, seen, paused, sessions, segments, parts: ownParts, ...room }) => {
+    rooms: Object.values(state.rooms).map(({ log, seen, paused, heldMembers, sessions, segments, parts: ownParts, ...room }) => {
       const parts = [...Object.values(sessions ?? {}), ...Object.values(segments ?? {}).flat().map(segment => segment.sessionId), ...(ownParts ?? []).map(segment => segment.sessionId)]
       const memberParts = Object.fromEntries(Object.entries(segments ?? {}).map(([botId, list]) => [botId, list.map(segment => segment.sessionId)]))
+      const heldView = heldMembers ? Object.fromEntries(Object.entries(heldMembers).map(([botId, entry]) => [botId, { at: entry.at, parked: entry.parked?.length ?? 0 }])) : {}
       const last = (log ?? []).filter(line => line.kind === undefined).at(-1)
       const lastBody = last ? (last.text || (Array.isArray(last.presented) ? last.presented.map(file => presentedFileName(file.path)).join(', ') : '')) : ''
-      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), memberSessions: sessions ?? {}, memberParts, parts, ...(last ? { lastAt: last.time, preview: last.who === 'User' ? lastBody : `${last.who}：${lastBody}` } : {}) }
+      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), memberSessions: sessions ?? {}, memberParts, ...(Object.keys(heldView).length > 0 ? { heldMembers: heldView } : {}), parts, ...(last ? { lastAt: last.time, preview: last.who === 'User' ? lastBody : `${last.who}：${lastBody}` } : {}) }
     }),
     // Deleted private Bots whose folder, memory and chats stay closed to the others.
     privateArchives: rt.archivesView(),
@@ -844,6 +845,10 @@ export function install(rt) {
           }
           await rt.answerApproval(body.id, body.choice)
           return ok(true)
+        case 'pause-member-work':
+          return ok(await rt.pauseMemberWork(String(body.roomId ?? ''), String(body.botId ?? '')))
+        case 'resume-member-work':
+          return ok(await rt.resumeMemberWork(String(body.roomId ?? ''), String(body.botId ?? ''), typeof body.note === 'string' ? body.note : undefined))
         // A stop that fails partway still parks the goal, or it wakes the admin again.
         case 'stop-member-work':
           try {

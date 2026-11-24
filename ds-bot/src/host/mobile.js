@@ -75,7 +75,7 @@ const ROOM_PAGE = 60
 const ROOM_SIGNAL_MS = 150
 // Non-revision pending items (approvals, browser holds) coalesce briefly into one `live` signal.
 const LIVE_SIGNAL_MS = 50
-const ROUND_EVENTS = new Set(['done', 'stopped', 'working', 'approval', 'failed', 'missed', 'lookup', 'resumed', 'cut'])
+const ROUND_EVENTS = new Set(['done', 'stopped', 'member-paused', 'member-resumed', 'working', 'approval', 'failed', 'missed', 'lookup', 'resumed', 'cut'])
 const POST_HEADER = /^\[Group post from [^\r\n]*\]\r?\n/
 
 const flat = text => String(text ?? '').replace(/\s+/g, ' ').trim()
@@ -171,7 +171,7 @@ export function roomItems(events, rowsOf = () => []) {
       } else if (source?.kind === SOURCE_KIND && source.role === 'post') {
         // A post a running round logged shows inside that round; a member's late failure,
         // picked-up work, stopped work or finished work is an event of the round it opens.
-        if (source.logged !== undefined || source.failed !== undefined || source.resumed === true || source.stopped === true || source.done === true || source.resumedPause === true) continue
+        if (source.logged !== undefined || source.failed !== undefined || source.resumed === true || source.stopped === true || source.memberPaused === true || source.memberResumed === true || source.done === true || source.resumedPause === true) continue
         const file = source.length === undefined ? undefined : content.find(block => block?.type === 'file')?.attachment
         const files = presentedFileRefs(source.presented)
         items.push({
