@@ -176,9 +176,10 @@ export function install(rt) {
     // for usage.
     rooms: Object.values(state.rooms).map(({ log, seen, paused, sessions, segments, parts: ownParts, ...room }) => {
       const parts = [...Object.values(sessions ?? {}), ...Object.values(segments ?? {}).flat().map(segment => segment.sessionId), ...(ownParts ?? []).map(segment => segment.sessionId)]
+      const memberParts = Object.fromEntries(Object.entries(segments ?? {}).map(([botId, list]) => [botId, list.map(segment => segment.sessionId)]))
       const last = (log ?? []).filter(line => line.kind === undefined).at(-1)
       const lastBody = last ? (last.text || (Array.isArray(last.presented) ? last.presented.map(file => presentedFileName(file.path)).join(', ') : '')) : ''
-      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), parts, ...(last ? { lastAt: last.time, preview: last.who === 'User' ? lastBody : `${last.who}：${lastBody}` } : {}) }
+      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), memberSessions: sessions ?? {}, memberParts, parts, ...(last ? { lastAt: last.time, preview: last.who === 'User' ? lastBody : `${last.who}：${lastBody}` } : {}) }
     }),
     // Deleted private Bots whose folder, memory and chats stay closed to the others.
     privateArchives: rt.archivesView(),
@@ -234,6 +235,14 @@ export function install(rt) {
     secretStore: rt.secretStoreStatus(),
     secrets: rt.secretsView(),
     activity: rt.activityView(),
+    // Which group member working Sessions have a live turn right now: the panel tab
+    // working mark reads this rather than guessing from the transcript.
+    partsRunning: Object.fromEntries(
+      Object.values(state.rooms).flatMap(room => Object.values(room.sessions ?? {}))
+        .filter((sessionId, index, list) => sessionId !== undefined && list.indexOf(sessionId) === index)
+        .filter(sessionId => rt.live.get(sessionId)?.turn !== undefined || rt.hasSubagents?.(sessionId) === true)
+        .map(sessionId => [sessionId, true]),
+    ),
     work: { bots: rt.workView(), agents: rt.agentWorkView?.() ?? {}, rooms: rt.roomWorkView(), activeRooms: Object.values(state.rooms ?? {}).filter(room => rt.roomActive?.(room.id) === true).map(room => room.id), approvals: rt.approvalsView(), waiting: rt.waitingView?.() ?? {}, paused: rt.pausedWorksView?.() ?? [], turns: rt.turnsView?.() ?? {}, steered: rt.steeredView?.() ?? {}, canBackground: rt.canBackgroundView?.() ?? {} },
     memoryNews: rt.memoryNews(),
     memoryReviews: rt.memoryReviews(),
@@ -597,7 +606,7 @@ export function install(rt) {
           if (bot === undefined) return fail('Unknown Bot', 'bot/not-found')
           const projections = ctx.get?.('sessionProjections')
           if (projections === undefined) return ok(null)
-          const sessionId = rt.chatOf(bot.id)
+          const sessionId = typeof body.sessionId === 'string' && rt.selfOf(body.sessionId) === bot.id ? body.sessionId : rt.chatOf(bot.id)
           const agent = await rt.resolveAgent(sessionId)
           const values = projections.snapshot(agent.session, RUN_STATS).values
           const measured = rt.contextRuntime?.measure?.(agent.session)

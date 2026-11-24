@@ -1,7 +1,7 @@
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { currentPart, latestMemoryChange } from './text.js'
-import { ArrowUpIcon, CloseIcon, ArrowDownIcon, GoalIcon, MemoryIcon, SearchIcon } from './icons.js'
+import { ArrowUpIcon, ChevronLeftIcon, CloseIcon, ArrowDownIcon, GoalIcon, MemoryIcon, SearchIcon } from './icons.js'
 import { botPendingOf, dmMarkState, lastTurnFailed, latestTurnOf, useBotApprovals, useBotHandoff, BotAvatar, RoomAvatar } from './mark.js'
 import { AgentBadge } from './agent-badge.js'
 import { ActivityIndicator } from './activity-row.js'
@@ -71,9 +71,10 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
     return () => document.body.style.removeProperty('--bt-first-sep')
   }, [opening])
   const running = useSessionStatus(map => map.get(sessionId)?.running === true)
-  const owner = roster.byId[sessionId]?.id ?? sessionId
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const bot = roster.byId[sessionId] ?? groupWork?.bot
+  const owner = bot?.id ?? sessionId
   const doing = useActivity(map => map[owner])
-  const bot = roster.byId[sessionId]
   const failed = lastTurnFailed(bot, useSessions(list => (bot ? latestTurnOf(list, currentPart(bot)) : undefined)))
   const { fgApproval, bgApproval } = useBotApprovals(bot?.id, useWork, useComputer)
   const handoff = useBotHandoff(bot?.id, useBrowserHolds, useComputer)
@@ -121,7 +122,7 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
   const goalShown = room !== undefined && !away && goal !== undefined
   const subjectId = bot?.id ?? room?.id ?? sessionId
   const detailsOpen = useUi(state => Boolean(state.details) && (state.details === sessionId || (roster.byId[state.details]?.id ?? roster.roomsById[state.details]?.id ?? state.details) === subjectId))
-  const name = bot?.name ?? room?.name ?? ''
+  const name = groupWork ? `${groupWork.bot.name} · ${groupWork.room.name}` : (bot?.name ?? room?.name ?? '')
   const useNews = useMemoryNews ?? noNews
   const memoryIds = bot ? [bot.id] : room ? [room.id, ...room.members] : []
   const notice = useMemoryNotice(memoryIds, useNews)
@@ -190,7 +191,7 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
       ? h('span', { className: 'bt-pill-swap' },
         h('span', { className: 'bt-pill-goal' }, h('span', { className: 'bt-pill-ico', 'aria-hidden': true }, h(GoalIcon)), h('span', { className: 'bt-pill-title' }, view.title)),
         h('span', { className: 'bt-pill-name' }, name))
-      : h('span', { className: 'bt-pill-name' }, away ? t('Back to chat') : bot?.name ?? room?.name ?? (title || t('New chat')), !away && bot?.engine ? h(AgentBadge, { engine: bot.engine }) : null),
+      : h('span', { className: 'bt-pill-name' }, away ? t('Back to chat') : (name || title || t('New chat')), !away && bot?.engine ? h(AgentBadge, { engine: bot.engine }) : null),
     goalShown && view?.number !== undefined ? h('span', { className: 'bt-pill-count' }, `${view.number}/${view.count}`) : null,
     h(MemoryNotice, { shown: memoryNotice }),
     h('span', { className: 'bt-pill-go', 'aria-hidden': true }, h(GoArrow)))
@@ -210,8 +211,16 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
       h('span', { className: 'bt-island-chip-dot', 'aria-hidden': true }),
       h('span', null, activeTasks.length))
     : null
+  const backToGroup = groupWork !== undefined && !away
+    ? h('button', {
+      type: 'button', className: 'bt-head-back', 'aria-label': t('Back to {name}', { name: groupWork.room.name }),
+      title: t('Back to {name}', { name: groupWork.room.name }),
+      onClick: () => actions.openSession?.(groupWork.room.id),
+    }, h(ChevronLeftIcon), h('span', { className: 'bt-head-back-name' }, groupWork.room.name))
+    : null
+  const headMain = showIsland ? h(GoalIsland, { room, goal, view, open: goalOpen, composing: goalCompose, approvalPod, approvalOpen, approvalsCount: standaloneApprovals.length, taskPod, taskOpen: taskDeckOpen, taskCount: activeTasks.length, taskHoverReveal, taskBadge, roomWork, roster, actions, pill }) : pill
   return h('div', { className: 'bt-head' },
-    showIsland ? h(GoalIsland, { room, goal, view, open: goalOpen, composing: goalCompose, approvalPod, approvalOpen, approvalsCount: standaloneApprovals.length, taskPod, taskOpen: taskDeckOpen, taskCount: activeTasks.length, taskHoverReveal, taskBadge, roomWork, roster, actions, pill }) : pill,
+    ...(backToGroup ? [backToGroup, headMain] : [headMain]),
     !away && PendingLearning ? h(PendingLearning, { key: sessionId, sessionId, useRoster, actions }) : null,
     h('span', { className: 'bt-sr', role: 'status' }, memoryNotice ? t('Memory updated') : ''),
     room !== undefined && !away

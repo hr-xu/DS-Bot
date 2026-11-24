@@ -1,7 +1,7 @@
 import { createElement as h, Fragment, useEffect, useRef, useState } from 'react'
 import { isMainOf } from './sources.js'
 import { HEADER, currentPart, runStatsOf, stripHeader, usageOf } from './text.js'
-import { PlusIcon, ShareIcon, CloseIcon, ChevronLeftIcon, GearIcon } from './icons.js'
+import { PlusIcon, ShareIcon, CloseIcon, ChevronLeftIcon, GearIcon, TerminalIcon } from './icons.js'
 import { botPendingOf, dmMarkState, lastTurnFailed, latestTurnOf, useBotApprovals, useBotHandoff, BotMark, BotAvatar } from './mark.js'
 import { GlobeIcon, Favicon, PanelMenu, menuItemFor } from './browser-pane.js'
 import { drawerMenuKeys } from './side-model.js'
@@ -51,19 +51,19 @@ function PermissionRow({ bot, roster, actions, run }) {
 }
 
 // The current part's turns, speed, cache hits and context, refreshed when a turn starts or ends.
-export function RunStats({ bot, part, running, actions }) {
+export function RunStats({ bot, part, sessionId, running, actions }) {
   const scope = `${bot.id}:${part ?? ''}`
   const [read, setRead] = useState(null)
   useEffect(() => {
     if (!actions.runStats) return undefined
     let current = true
-    actions.runStats(bot.id).then(
+    actions.runStats(bot.id, sessionId).then(
       (values) => { if (current) setRead({ scope, values }) },
       // The line stays as it was until the next read works.
       () => {},
     )
     return () => { current = false }
-  }, [scope, bot.id, running, actions])
+  }, [scope, bot.id, sessionId, running, actions])
   const shown = runStatsOf(read?.scope === scope ? read.values : null)
   if (shown.length === 0) return null
   return h('div', { className: 'bt-run-stats' },
@@ -173,6 +173,7 @@ const markOf = entry => (entry?.state === 'ask' ? 'alert' : entry?.state === 'wo
 // One member: its mark, name and what it is doing on one surface that opens its chat;
 // Stop beside it while it works here, and the approvals it waits on below.
 function MemberRow({ member, entry, room, roster, actions }) {
+  const workSessionId = room.memberSessions?.[member.id]
   return h('div', { role: 'listitem', className: 'bt-member' },
     h('div', { className: 'bt-member-row' },
       h('button', { type: 'button', className: 'bt-member-open', title: t("Open {name}'s chat", { name: member.name }), onClick: () => actions.openSession(member.id) },
@@ -182,6 +183,9 @@ function MemberRow({ member, entry, room, roster, actions }) {
             h('span', { className: 'bt-member-name' }, member.name),
             room.admin === member.id ? h('span', { className: 'bt-tag' }, t('Admin')) : null),
           h(MemberState, { entry, bot: member, room, roster }))),
+      workSessionId && actions.openGroupWork
+        ? h('button', { type: 'button', className: 'bt-member-go', 'aria-label': `${t('Session')} · ${member.name}`, title: t('Working session in {name}', { name: room.name }), onClick: () => actions.openGroupWork(room.id, member.id) }, h(TerminalIcon))
+        : null,
       h(StopMemberWork, { entry, bot: member, room, actions })),
     h(MemberApprovals, { entry, bot: member, actions, readOnly: Boolean(roster?.readOnly) }))
 }
@@ -232,8 +236,9 @@ function GroupOverview({ room, roster, actions, usage, useWork, useComputer, ope
 }
 
 export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer }) {
-  const owner = roster.byId[sessionId]
-  const part = owner ? currentPart(owner) : sessionId
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const owner = roster.byId[sessionId] ?? groupWork?.bot
+  const part = groupWork ? sessionId : (owner ? currentPart(owner) : sessionId)
   const isMainBot = isMainOf(roster, owner?.id)
   const [tab, setTab] = useState(
     startTab === 'tasks' ? 'tasks'
@@ -379,7 +384,7 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
       room && activeTab === 'details' ? h(GroupOverview, { room, roster, actions, usage, useWork, useComputer, openSettings: () => setView('settings') }) : null,
       bot && activeTab === 'computer' ? h(ComputerView, { bot, actions, hooks: { useComputer } }) : null,
       bot && activeTab === 'details' ? [
-        h(RunStats, { key: 'stats', bot, part, running, actions }),
+        h(RunStats, { key: 'stats', bot, part, sessionId: groupWork ? part : undefined, running, actions }),
         h('div', { key: 'model', className: 'bt-drawer-model' },
           h('div', { className: 'bt-section-title' }, t('Model')),
           h(ModelMenu, { bot, roster, actions, run, wide: true, inline: true }),

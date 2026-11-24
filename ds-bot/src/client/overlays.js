@@ -28,7 +28,7 @@ const useDefaultSidebarPref = () => 'open'
 const useDefaultFalse = () => false
 const useDefaultNull = () => null
 
-export function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity, useWork, useComputer, useRegistry, useBrowserPages, useBrowserTabs, useBrowserHolds, useBotCompletions, useUpdate, useFrame, useSidebarPref, useSettingsShellHeld, dsh, actions, workspace }) {
+export function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity, useWork, useComputer, useRegistry, useBrowserPages, useBrowserTabs, useBrowserHolds, useBotCompletions, useUpdate, useFrame, useSidebarPref, useSettingsShellHeld, dsh, actions, workspace, SessionProvider, renderSlot }) {
   const roster = useRoster(value => value)
   const ui = useUi(value => value)
   useRegistry(value => value)
@@ -48,7 +48,7 @@ export function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useA
     previous.current = current
     if (current) actions.followPanel?.(current)
   }, [current])
-  const open = ui.details ? { id: ui.details, view: ui.view ?? 'details', renaming: ui.renaming, tab: ui.tab, side: ui.side, task: ui.task } : null
+  const open = ui.details ? { id: ui.details, view: ui.view ?? 'details', renaming: ui.renaming, tab: ui.tab, side: ui.side, task: ui.task, work: ui.work, works: ui.works } : null
   // A panel that no longer fits folds away: its state stays open, it just is not
   // mounted — the usual exit plays and the webview goes with it — until the room
   // returns and it shows again on its own.
@@ -63,7 +63,7 @@ export function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useA
     if (shown) { setKept(shown); return undefined }
     const timer = setTimeout(() => setKept(null), reducedMotion() ? 0 : PANEL_LINGER_MS)
     return () => clearTimeout(timer)
-  }, [ui.details, ui.view, ui.renaming, ui.tab, ui.side, ui.task, shown === null])
+  }, [ui.details, ui.view, ui.renaming, ui.tab, ui.side, ui.task, ui.work, shown === null])
   const pane = shown ?? kept
   // The settings shell draws the dialog while DS Bot holds the seat.
   const shellHeld = useReadSettingsShellHeld(value => value)
@@ -215,9 +215,9 @@ export function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useA
       createPortal(h(OpeningCover, { model: opening, column: layout.column, onNewSession: actions?.recoverOpening, onRetry: actions?.retryOpening }), document.body)) : null,
     pane ? h(OverlayBoundary, {
       name: 'panel', active: shown !== null, notify: shown !== null,
-      reset: `${roster.byId[pane.id]?.id ?? roster.roomsById[pane.id]?.id ?? pane.id}:${pane.view}:${pane.tab ?? ''}:${pane.side ?? ''}:${pane.task?.botId ?? ''}:${pane.task?.taskId ?? ''}:${workspace?.active ?? ''}`,
+      reset: `${roster.byId[pane.id]?.id ?? roster.roomsById[pane.id]?.id ?? pane.id}:${pane.view}:${pane.tab ?? ''}:${pane.side ?? ''}:${pane.task?.botId ?? ''}:${pane.task?.taskId ?? ''}:${pane.work ?? ''}:${workspace?.active ?? ''}`,
       onDismiss: () => actions.closePanel?.(), actions,
-    }, createPortal(h(BotPanel, { pane, leaving: shown === null, room: layout.room, overlay: layout.panel === 'overlay', roster, actions, useSessions, useSessionStatus, useActivity, useWork, useComputer, useBrowserTabs, useBrowserPages, useBrowserHolds, workspace }), document.body)) : null,
+    }, createPortal(h(BotPanel, { pane, current, leaving: shown === null, room: layout.room, overlay: layout.panel === 'overlay', roster, actions, useSessions, useSessionStatus, useActivity, useWork, useComputer, useBrowserTabs, useBrowserPages, useBrowserHolds, workspace, SessionProvider, renderSlot }), document.body)) : null,
     ui.newChat ? h(OverlayBoundary, {
       name: 'new-chat', reset: `${ui.newChat}:${ui.newChatSection ?? ''}`,
       onDismiss: () => (actions.closeNewChat ?? actions.closeOverlay)?.(), actions,

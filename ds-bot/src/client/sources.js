@@ -16,7 +16,7 @@ export function createSource(initial) {
   }
 }
 
-export const EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], sections: [], exchangeTurns: {}, questions: {}, views: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, phone: null, secretRequests: {}, connectorRequests: {}, mailRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, agentsById: {}, agentOf: {}, ready: false }
+export const EMPTY_ROSTER = { revision: -1, mainBotId: null, mainBotIds: [], bots: [], rooms: [], agents: [], sections: [], exchangeTurns: {}, questions: {}, views: {}, btwCards: {}, sideChats: {}, learning: {}, secrets: [], capabilities: [], capabilityStatuses: {}, phone: null, secretRequests: {}, connectorRequests: {}, mailRequests: {}, models: [], defaultModel: null, modelsKey: null, prefs: {}, byId: {}, roomsById: {}, groupSessionOf: {}, agentsById: {}, agentOf: {}, ready: false }
 // Any Main Bot holds the Main Bot powers; `mainBotId`, the first one, is the sidebar tile.
 export const isMainOf = (roster, id) => id !== undefined && (roster.mainBotIds ?? []).includes(id)
 export const sectionCollapsed = (section, sectionFolds) => sectionFolds?.[section.id] ?? section.collapsed
@@ -33,10 +33,16 @@ export function indexRoster(value) {
     for (const id of [...(bot.parts ?? []), ...tasks, bot.sessionId ?? bot.id, bot.id]) byId[id] = bot
   }
   const roomsById = {}
+  const groupSessionOf = {}
   // A group's own Session is a chain of parts like a Bot's chat: `room.id` is its
   // first part's id and `sessionId` its current one; every part id finds the room.
+  // Each member's working Session in the group maps back to both the room and member.
   for (const room of value.rooms) {
     for (const id of [room.id, room.sessionId, ...(room.ownParts ?? [])]) roomsById[id] = room
+    for (const [botId, sessionId] of Object.entries(room.memberSessions ?? {})) {
+      const bot = byId[botId]
+      if (bot && sessionId) groupSessionOf[sessionId] = { room, bot }
+    }
   }
   // The DSH Agent is not a Bot: it indexes by its own id and by each Session it owns.
   const agentsById = {}
@@ -45,7 +51,7 @@ export function indexRoster(value) {
     agentsById[agent.id] = agent
     for (const sessionId of agent.sessions ?? []) agentOf[sessionId] = agent.id
   }
-  return { ...value, agents: value.agents ?? [], sections: value.sections ?? [], byId, roomsById, agentsById, agentOf, ready: true }
+  return { ...value, agents: value.agents ?? [], sections: value.sections ?? [], byId, roomsById, groupSessionOf, agentsById, agentOf, ready: true }
 }
 
 // Whether a main-view Session id belongs to the team's DSH Agent: the conversation

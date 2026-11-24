@@ -25,6 +25,7 @@ import { QuestionCard, QuestionDock } from './questions.js'
 import { AnsweredReply, WidgetDock, WIDGET_CSS } from './widget-cell.js'
 import { CHANGES_CSS } from './changes-card.js'
 import { HandoffDock, HANDOFF_CSS } from './handoff-card.js'
+import { ReadOnlyDock, READ_ONLY_CSS } from './read-only-dock.js'
 import { WorkPauseDock } from './work-pause-card.js'
 import { AppAccessDock, ComputerHandoffDock, ComputerIndicator, COMPUTER_CSS } from './computer.js'
 import { installHeaderNavigation } from './header-navigation.js'
@@ -110,7 +111,7 @@ export function apply(ctx) {
   let seenAt = seenStore.read()
   // `details` is the panel's subject (a Session id); `view` picks details or the
   // subject Bot's browser inside it.
-  const ui = createSource({ details: null, view: 'details', renaming: false, tab: null, side: null, task: null, taskDeck: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, paste: {}, pendingOpen: null, settings: null, releaseNotes: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {}, panelYield: false, leftDrawer: false, bootFailed: false, goalCompose: null, goalOpen: null, approvalOpen: null, inbox: false })
+  const ui = createSource({ details: null, view: 'details', readOnlyPart: null, renaming: false, tab: null, side: null, task: null, taskDeck: null, work: null, works: {}, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, paste: {}, pendingOpen: null, settings: null, releaseNotes: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {}, panelYield: false, leftDrawer: false, bootFailed: false, goalCompose: null, goalOpen: null, approvalOpen: null, inbox: false })
   // The left column's kept preference, and the frame geometry the layout rules
   // in frame-layout.js read: the window and the shell's collapsed track come from
   // installFrameWatch, the open column's width is the user's own.
@@ -656,6 +657,7 @@ export function apply(ctx) {
     const snapshot = roster.getSnapshot()
     if (snapshot.byId[sessionId] !== undefined) return snapshot.byId[sessionId]
     if (snapshot.roomsById[sessionId] !== undefined) return snapshot.roomsById[sessionId]
+    if (snapshot.groupSessionOf?.[sessionId] !== undefined) return snapshot.groupSessionOf[sessionId].bot
     return Object.values(snapshot.byId).find(bot => currentPart(bot) === sessionId)
       ?? Object.values(snapshot.roomsById).find(room => (room.sessionId ?? room.id) === sessionId)
   }
@@ -701,7 +703,7 @@ export function apply(ctx) {
     const snapshot = roster.getSnapshot()
     if (!snapshot.ready || !snapshot.mainBotId) return
     const main = mainView()
-    if (main !== undefined && snapshot.byId[main] === undefined && snapshot.roomsById[main] === undefined) {
+    if (main !== undefined && snapshot.byId[main] === undefined && snapshot.roomsById[main] === undefined && snapshot.groupSessionOf?.[main] === undefined) {
       actions.openSession(snapshot.mainBotId)
     }
   }
@@ -773,6 +775,31 @@ export function apply(ctx) {
         recovering.delete(botId)
       }
     },
+    openGroupWork: (roomId, botId) => {
+      const snap = roster.getSnapshot()
+      const room = snap.roomsById[roomId]
+      const target = room?.memberSessions?.[botId]
+      if (!target) return
+      void Promise.resolve(ctx.sessions.refreshProjections?.(target)).catch(quietly('refresh projections'))
+      const main = mainView()
+      if (main === target) return
+      const detailsId = ui.getSnapshot().details ?? main ?? (room.sessionId ?? room.id)
+      actions.openPanelWork(detailsId, target)
+    },
+    openGroupWorkMain: (roomId, botId) => {
+      const target = roster.getSnapshot().roomsById[roomId]?.memberSessions?.[botId]
+      if (!target) return
+      ui.set(state => ({
+        ...state,
+        newChat: null, exchange: null, menu: null, palette: null, groupSearch: null,
+        ...(state.view === 'work' && state.work === target ? { view: 'details', work: null } : {}),
+      }))
+      void Promise.resolve(ctx.sessions.refreshProjections?.(target)).catch(quietly('refresh projections'))
+      setPlain(false)
+      show(target)
+    },
+    retainSession: (sessionId, signal) => ctx.sessions.retain(sessionId, { source: 'botPanel', signal }),
+    refreshSessions: () => Promise.resolve(ctx.sessions.refresh?.()).catch(quietly('refresh sessions')),
     // The conversation replacements withdraw for a plain Session; set the surface
     // before the navigation so the Bot skin never flashes.
     openAgentSession: (sessionId) => {
@@ -944,7 +971,8 @@ export function apply(ctx) {
     Object.assign(actions, {
       // The globe button: the Bot's active tab in the browser view, or a new tab.
       openBrowser: (id) => {
-        const bot = roster.getSnapshot().byId[id]
+        const snap = roster.getSnapshot()
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot
         if (!bot) return
         browsers.ensureTabs(bot.id)
         if (browsers.tabs.getSnapshot()[bot.id]?.active == null) browsers.openTab(bot.id)
@@ -965,7 +993,8 @@ export function apply(ctx) {
       },
       // '+' on the strip or the drawer's new-tab card: a blank tab in the browser view.
       browserNewTab: (id) => {
-        const bot = roster.getSnapshot().byId[id]
+        const snap = roster.getSnapshot()
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot
         if (!bot) return null
         browsers.ensureTabs(bot.id)
         const tabId = browsers.openTab(bot.id)
@@ -974,7 +1003,8 @@ export function apply(ctx) {
       },
       // A drawer card: its tab active, the panel on the browser view.
       browserPick: (id, tabId) => {
-        const bot = roster.getSnapshot().byId[id]
+        const snap = roster.getSnapshot()
+        const bot = snap.byId[id] ?? snap.groupSessionOf?.[id]?.bot
         if (!bot) return
         browsers.activate(bot.id, tabId)
         ui.set(state => ({ ...state, details: id, view: 'browser', panelYield: yieldBrowser(state) }))
@@ -1557,6 +1587,21 @@ export function apply(ctx) {
       for (const off of offs) off()
     }
   }
+  const FixedChatConversationView = props => props.renderSlot('conversation.session', { view: 'chat' })
+  const PanelConversation = ({ sessionId, useSession, useConversation, useSessions, renderFactorySlot }) => {
+    const session = useSession(value => value)
+    const shellPhase = useConversation(value => value).activeTargets.size > 0 || (!session.blank && !session.awaitingFirstTurn) || session.running
+      ? 'active'
+      : session.promptAttempted ? 'engaging' : 'blank'
+    const summaryBlank = useSessions(state => state.byId[sessionId]?.blank)
+    const settling = shellPhase === 'blank' && session.openState === 'loading' && summaryBlank !== true
+    const hero = shellPhase === 'blank' && (session.openState === 'open' || summaryBlank === true)
+    return renderFactorySlot('conversation.content', {
+      variant: 'embedded',
+      phase: settling ? 'settling' : hero ? 'hero' : 'active',
+      hero,
+    }, { slots: { views: FixedChatConversationView } })
+  }
   const installShell = () => [
     () => { shellSheets += 1; return () => { shellSheets -= 1 } },
     ...SHELL_SHEETS.map(([text, tag]) => () => installCompiledStyles(text, tag)),
@@ -1572,12 +1617,16 @@ export function apply(ctx) {
     // Desktop's "··· More"), which comes back in Agent mode.
     () => shadow('settings.launcher', { priority: BOT_PRIORITY, inject: face }, AccountLauncher),
     () => shadow('shell.overlay', { id: 'bot-computer', order: 40, inject: face }, ComputerIndicator),
-    () => shadow('shell.overlay', { id: 'bot', order: 50, inject: face }, Overlays),
+    () => shadow('shell.overlay', {
+      id: 'bot', order: 50, inject: face,
+      children: { 'ds-bot.panel.conversation': { kind: 'single', scope: 'session' } },
+    }, Overlays),
+    () => shadow('ds-bot.panel.conversation', {}, PanelConversation),
     () => shadow('shell.overlay', { id: 'bot-signin', order: 55, inject: face }, DeepSeekSignIn),
     () => shadow('shell.overlay', { id: 'bot-toast', order: 60, inject: face }, ErrorToast),
   ]
   const installConversation = () => [
-    () => installCompiledStyles(CONVERSATION_CSS, 'conversation'),
+    () => installCompiledStyles(CONVERSATION_CSS + READ_ONLY_CSS, 'conversation'),
     () => installCompiledStyles(TURN_ERROR_CSS, 'turn-errors'),
     () => installCompiledStyles(QUEUE_CSS, 'queue'),
     () => installCompiledStyles(ANNOTATION_CSS, 'text-annotation'),
@@ -1636,6 +1685,7 @@ export function apply(ctx) {
       inject: face,
       select: owner => (owner.pendingInteraction?.kind === 'question' ? owner.pendingInteraction : null),
     }, QuestionCard),
+    () => shadow('conversation.input.dock', { id: 'bot-readonly', order: -140, inject: face }, ReadOnlyDock),
     () => shadow('conversation.input.dock', { id: 'bot-paste', order: -130, inject: face }, PasteDock),
     () => shadow('conversation.input.dock', { id: 'bot-members', order: -120, inject: face }, MemberDock),
     () => shadow('conversation.input.dock', { id: 'bot-model', order: -110, inject: face }, ModelChoiceDock),
@@ -1737,7 +1787,7 @@ export function apply(ctx) {
       const agentId = before !== undefined ? agentOfSession(before) : undefined
       if (agentId === undefined) return
       const snapshot = roster.getSnapshot()
-      if (snapshot.byId[main] !== undefined || snapshot.roomsById[main] !== undefined || agentOfSession(main) !== undefined) return
+      if (snapshot.byId[main] !== undefined || snapshot.roomsById[main] !== undefined || snapshot.groupSessionOf?.[main] !== undefined || agentOfSession(main) !== undefined) return
       // Only a blank Session from the workspace picker joins here. Existing
       // Sessions opened from the native sidebar keep their tools and stay out.
       const row = list.byId[main]

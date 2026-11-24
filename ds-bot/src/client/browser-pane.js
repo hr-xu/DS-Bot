@@ -6,7 +6,7 @@
 // covers.
 import { createElement as h, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BotMark } from './mark.js'
+import { BotMark, RoomAvatar } from './mark.js'
 import { STORAGE } from './storage.js'
 import { MIN_CHAT } from './frame-layout.js'
 import { chatRoom } from './frame-watch.js'
@@ -26,13 +26,12 @@ export { ImportCard, ImportMenu, PreviewCard, RemoteDebugCard, SafariPermissionC
 
 export const PANEL_LINGER_MS = 300
 const WIDTH_KEY = STORAGE.browserWidth
-// One width for the panel, shared by both views. The Bot page keeps it within
-// DETAILS_WIDTH..DETAILS_MAX, so a wider browser comes back to DETAILS_MAX and a
-// narrower one keeps its width; the browser takes any width from MIN_WIDTH.
+// One width for the panel, shared across every tab in the strip so switching tabs
+// never shifts the panel edge. With no strip open, an untouched panel starts at
+// DETAILS_WIDTH; once a strip tab opens, it starts at DEFAULT_WIDTH.
 const DEFAULT_WIDTH = 520
 const DEFAULT_WORKSPACE_WIDTH = 440
 const DETAILS_WIDTH = 320
-const DETAILS_MAX = 520
 const MIN_WIDTH = 360
 // How long the Bot's mark shows that it read the page.
 const READ_FLASH_MS = 2400
@@ -52,6 +51,7 @@ const CloseIcon = icon(['M5.5 5.5l9 9M14.5 5.5l-9 9'])
 export const PlusTabIcon = icon(['M10 4.5v11M4.5 10h11'], 1.75)
 const LockIcon = icon(['M6.5 9V7a3.5 3.5 0 0 1 7 0v2', 'M5.5 9h9v7h-9z'])
 const ImportIcon = icon(['M10 3.5v8', 'M6.75 8.5L10 11.75l3.25-3.25', 'M4.5 13.25v1.25A1.5 1.5 0 0 0 6 16h8a1.5 1.5 0 0 0 1.5-1.5v-1.25'])
+const ExpandIcon = icon(['M11.5 4.5h4v4', 'M15.5 4.5L9.5 10.5', 'M13.5 11.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3'])
 
 /** A page's favicon, or the globe while there is none or it fails to load. */
 export function Favicon({ src, className }) {
@@ -71,9 +71,7 @@ const savedWidth = () => {
 // `room` is what the panel and the conversation share: the viewport minus the
 // left column's footprint (frame-layout.js). The panel never takes the last
 // MIN_CHAT px of it; below that it covers the conversation instead.
-const widthRange = (view, room) => (view === 'browser' || view === 'workspace'
-  ? [MIN_WIDTH, room - MIN_CHAT]
-  : [DETAILS_WIDTH, Math.min(DETAILS_MAX, room - MIN_CHAT)])
+const widthRange = (hasStrip, room) => [hasStrip ? MIN_WIDTH : DETAILS_WIDTH, room - MIN_CHAT]
 const fitWidth = (width, [low, high]) => Math.round(Math.max(low, Math.min(width, high)))
 const attrValue = value => String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 // The address as the bar shows it while not editing: no scheme, no trailing slash.
@@ -158,7 +156,7 @@ export function menuItemFor(key, actions, subject) {
 const sideTitle = chat => chat?.entries?.[0]?.question?.trim() || t('Side chat')
 
 // The strip across the panel's top: the Bot's own tab first (the details view,
-// collapsed), then browser pages, side chats, task reader, and workspace tabs,
+// collapsed), then work sessions, browser pages, side chats, task reader, and workspace tabs,
 // followed by browser-style `+` and right-pinned close.
 const syncStripOverflow = (box) => {
   if (!box?.dataset) return
@@ -174,7 +172,7 @@ const measureTabSpot = (box, node, isStickyBot) => {
   return { left, right: box.offsetWidth - left - node.offsetWidth, boxWidth: box.offsetWidth }
 }
 
-export function PanelStrip({ bot, roomSubject, subject, browserOwner, view, ids, active, sides, side, task, workspace, hasSubjectDetails = true, canBrowse, reading, onView, actions, useBrowserPages }) {
+export function PanelStrip({ bot, roomSubject, subjectRoom = roomSubject, roster, subject, browserOwner, view, ids, active, sides, side, task, works = [], work, activeWorkInfo, workspace, hasSubjectDetails = true, canBrowse, canSide = Boolean(bot), reading, onView, actions, useBrowserPages }) {
   const browserId = browserOwner ?? bot?.id ?? subject
   const pages = useBrowserPages(map => map)
   const wsTabs = workspace?.tabs ?? []
@@ -212,13 +210,15 @@ export function PanelStrip({ bot, roomSubject, subject, browserOwner, view, ids,
     if (!box || !capsule) return undefined
     const node = view === 'details'
       ? box.querySelector('.bt-ptab-bot')
-      : view === 'side'
-        ? box.querySelector(`[data-side="${attrValue(side)}"]`)
-        : view === 'task' && task
-          ? box.querySelector(`[data-task="${attrValue(task.id)}"]`)
-          : view === 'workspace' && wsActive !== null
-            ? box.querySelector(`[data-ws-tab="${attrValue(wsActive)}"]`)
-            : box.querySelector(`[data-tab="${attrValue(active)}"]`)
+      : view === 'work'
+        ? box.querySelector(`[data-work="${attrValue(work)}"]`)
+        : view === 'side'
+          ? box.querySelector(`[data-side="${attrValue(side)}"]`)
+          : view === 'task' && task
+            ? box.querySelector(`[data-task="${attrValue(task.id)}"]`)
+            : view === 'workspace' && wsActive !== null
+              ? box.querySelector(`[data-ws-tab="${attrValue(wsActive)}"]`)
+              : box.querySelector(`[data-tab="${attrValue(active)}"]`)
     const sticky = view === 'details' && node !== null
     under.current = node
     isStickyBot.current = sticky
@@ -299,12 +299,14 @@ export function PanelStrip({ bot, roomSubject, subject, browserOwner, view, ids,
       box.removeEventListener?.('wheel', onWheel)
     }
   }, [])
+  const menuSubject = view === 'work' && work ? work : subject
   const items = stripMenuKeys({
     canBrowse,
-    canSide: Boolean(bot),
+    canSide,
     canTerminal: actions.canOpenTerminal?.() === true,
     canFiles: actions.canOpenFiles?.() === true,
-  }).map(key => menuItemFor(key, actions, key === 'browser' || key === 'new-tab' ? browserId : subject))
+  }).map(key => menuItemFor(key, actions, key === 'browser' || key === 'new-tab' ? browserId : menuSubject))
+  const homeTitle = subjectRoom ? subjectRoom.name : (bot?.name ?? t('Details'))
   // `data-window-drag` is the shell's window drag-row mark on macOS: base.css turns it
   // into the drag geometry, and the shell's watcher re-collects that geometry while the
   // panel slides in. The rule in styles.js declares the same row for a shell without it.
@@ -312,10 +314,35 @@ export function PanelStrip({ bot, roomSubject, subject, browserOwner, view, ids,
     h('div', { className: 'bt-ptabs-in', ref: wrap },
       hasSubjectDetails ? h('button', {
         type: 'button', role: 'tab', 'aria-selected': view === 'details', className: 'bt-ptab bt-ptab-bot',
-        title: bot?.name ?? roomSubject?.name ?? t('Details'), onClick: () => onView('details'),
+        title: homeTitle, onClick: () => onView('details'),
       },
-        bot ? h(BotMark, { bot, size: 20, state: reading ? 'searching' : 'idle' }) : null,
-        view === 'details' || !bot ? h('span', { className: 'bt-ptab-name' }, bot?.name ?? roomSubject?.name ?? t('Details')) : null) : null,
+        subjectRoom
+          ? h(RoomAvatar, { room: subjectRoom, roster, size: 20 })
+          : bot ? h(BotMark, { bot, size: 20, state: reading ? 'searching' : 'idle' }) : null,
+        view === 'details' || (!bot && !subjectRoom) ? h('span', { className: 'bt-ptab-name' }, homeTitle) : null) : null,
+      works.map((workId) => {
+        const info = roster?.groupSessionOf?.[workId]
+        if (!info) return null
+        const on = view === 'work' && workId === work
+        const label = subjectRoom ? info.bot.name : info.room.name
+        return h('div', {
+          key: workId, role: 'presentation', 'data-work': workId, 'data-selected': on || undefined, className: 'bt-ptab-wrap bt-ptab-work',
+        },
+          h('button', {
+            type: 'button', role: 'tab', 'aria-selected': on, className: 'bt-ptab bt-ptab-btn',
+            title: t('Working session in {name}', { name: info.room.name }),
+            onClick: () => actions.openPanelWork(subject, workId),
+            onAuxClick: (event) => { if (event.button === 1) { event.preventDefault(); actions.closePanelWork(subject, workId) } },
+          },
+            subjectRoom
+              ? h(BotMark, { bot: info.bot, size: 18, state: roster.partsRunning?.[workId] ? 'working' : 'idle' })
+              : h(RoomAvatar, { room: info.room, roster, size: 18 }),
+            h('span', { className: 'bt-ptab-title' }, label)),
+          h('button', {
+            type: 'button', className: 'bt-ptab-x', 'aria-label': t('Close tab'), title: t('Close tab'),
+            onClick: () => { actions.closePanelWork(subject, workId) },
+          }, '×'))
+      }),
       ids.map((tabId) => {
         const page = pages[tabId] ?? EMPTY_PAGE
         const on = view === 'browser' && tabId === active
@@ -398,6 +425,13 @@ export function PanelStrip({ bot, roomSubject, subject, browserOwner, view, ids,
             : null)
       }),
       h('span', { ref: ind, className: 'bt-ptab-ind', 'aria-hidden': true })),
+    view === 'work' && activeWorkInfo && actions.openGroupWorkMain
+      ? h('button', {
+        type: 'button', className: 'bt-icon-btn bt-ptab-expand',
+        'aria-label': t('Open in main view'), title: t('Open in main view'),
+        onClick: () => actions.openGroupWorkMain(activeWorkInfo.room.id, activeWorkInfo.bot.id),
+      }, h(ExpandIcon))
+      : null,
     // `+` sits right after the tabs (and pins before Close on overflow); Close stays right-aligned.
     items.length > 0 ? h(PanelMenu, { items, className: 'bt-ptab-new', 'aria-label': t('New tab') }) : null,
     h('button', { type: 'button', className: 'bt-icon-btn bt-ptab-close', 'aria-label': t('Close panel'), title: t('Close panel'), onClick: () => actions.closePanel() }, h(CloseIcon)))
@@ -425,6 +459,47 @@ export function shouldCheckBrowserCover(records) {
     if (record.target.closest?.(OVERLAY_SELECTOR)) return true
     return hasOverlayNode(record.addedNodes) || hasOverlayNode(record.removedNodes)
   })
+}
+
+const useEmptySessions = () => false
+function WorkSessionView({ workSessionId, info, useSessions = useEmptySessions, SessionProvider, renderSlot, actions }) {
+  const listed = useSessions(state => state.byId?.[workSessionId] !== undefined)
+  const [reference, setReference] = useState(null)
+  useEffect(() => {
+    if (listed) return undefined
+    void actions.refreshSessions?.()
+    const timer = setInterval(() => { void actions.refreshSessions?.() }, 600)
+    return () => clearInterval(timer)
+  }, [workSessionId, listed])
+  useEffect(() => {
+    if (!listed || typeof actions.retainSession !== 'function') {
+      setReference(null)
+      return undefined
+    }
+    const controller = new AbortController()
+    let ref = null
+    try {
+      ref = actions.retainSession(workSessionId, controller.signal)
+      setReference(ref)
+    } catch (error) {
+      setReference(null)
+      actions.reportError?.(error, 'work-panel')
+    }
+    return () => {
+      controller.abort()
+      setReference(null)
+      ref?.release()
+    }
+  }, [workSessionId, listed])
+  const placeholder = JSON.stringify(t('Message {name}', { name: info.bot.name }))
+  return h('div', {
+    className: 'bt-panel-view bt-panel-work',
+    'aria-label': `${info.bot.name} · ${info.room.name}`,
+    style: { '--bt-placeholder': placeholder, '--bt-first-sep': 'none' },
+  },
+    reference && SessionProvider && renderSlot
+      ? h(SessionProvider, { key: workSessionId, session: reference }, renderSlot('ds-bot.panel.conversation', {}))
+      : h('div', { className: 'bt-work-loading' }, h('span', { className: 'bt-shimmer' }, t('Loading…'))))
 }
 
 // The browser view: toolbar (back, forward, reload/stop, address) over the frame
@@ -634,11 +709,15 @@ export function BrowserView({ bot, ownerId, tabId, leaving, landed, actions, use
  * `id` is the Session id the panel follows and `side` the open chat's id. Without the
  * Desktop bridge the browser view never shows; side chats need no bridge.
  */
-export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, workspace }) {
-  const bot = roster.byId[pane.id]
-  const roomSubject = roster.roomsById?.[pane.id]
-  const subjectId = bot?.id ?? roomSubject?.id ?? pane.id
-  const hasSubjectDetails = Boolean(bot || roomSubject)
+export function BotPanel({ pane, current, leaving, room, overlay, roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds, useComputer, workspace, SessionProvider, renderSlot }) {
+  const subjectRoom = roster.roomsById?.[pane.id]
+  const bot = roster.byId[pane.id] ?? roster.groupSessionOf?.[pane.id]?.bot
+  const subjectId = bot?.id ?? subjectRoom?.id ?? pane.id
+  const hasSubjectDetails = Boolean(bot || subjectRoom)
+  const ownerKey = subjectRoom ? `room:${subjectRoom.id}` : bot ? `bot:${bot.id}` : null
+  const workIds = (ownerKey ? (pane.works?.[ownerKey] ?? []) : []).filter(id => id !== current && roster.groupSessionOf?.[id] !== undefined)
+  const activeWork = workIds.includes(pane.work) ? pane.work : null
+  const activeWorkInfo = activeWork ? roster.groupSessionOf[activeWork] : undefined
   const wsTabs = workspace?.tabs ?? []
   const hasWs = wsTabs.length > 0
   const activeWsTab = wsTabs.find(tab => tab.id === workspace?.active)
@@ -650,11 +729,12 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
   const taskEntry = taskBot && pane.task?.taskId ? (taskBot.tasks ?? []).find(item => item?.id === pane.task.taskId) : undefined
   const view = pane.view === 'browser' && canBrowse ? 'browser'
     : pane.view === 'side' && sideChat !== undefined ? 'side'
-      : pane.view === 'task' && taskEntry !== undefined ? 'task'
-        : pane.view === 'workspace' && (hasWs || leaving) ? 'workspace'
-          : hasSubjectDetails ? 'details'
-            : hasWs ? 'workspace'
-              : 'details'
+      : pane.view === 'work' && activeWork !== null ? 'work'
+        : pane.view === 'task' && taskEntry !== undefined ? 'task'
+          : pane.view === 'workspace' && (hasWs || leaving) ? 'workspace'
+            : hasSubjectDetails ? 'details'
+              : hasWs ? 'workspace'
+                : 'details'
   const tabState = useBrowserTabs(map => (browserOwner ? (map[browserOwner] ?? EMPTY_TABS) : EMPTY_TABS))
   const active = tabState.active
   const page = useBrowserPages(pages => (active ? pages[active] : null) ?? EMPTY_PAGE)
@@ -673,14 +753,10 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
   const instant = dragging || resizing
   const [reading, setReading] = useState(false)
 
-  const defaultWidth = view === 'browser' ? DEFAULT_WIDTH : view === 'workspace' ? DEFAULT_WORKSPACE_WIDTH : DETAILS_WIDTH
-  const panelWidth = fitWidth(width ?? defaultWidth, widthRange(view, room))
-  // Once the browser or workspace has shown, the Bot page keeps its width (up to DETAILS_MAX).
-  useLayoutEffect(() => {
-    if (width !== null) return
-    if (view === 'browser') setWidth(DEFAULT_WIDTH)
-    else if (view === 'workspace') setWidth(DEFAULT_WORKSPACE_WIDTH)
-  }, [view, width])
+  const hasStrip = panelHasStrip(canBrowse, tabState.ids.length, sideChats.length, taskEntry !== undefined, wsTabs.length, workIds.length)
+    || (workspace !== undefined && (!hasSubjectDetails || (leaving && (pane.view === 'workspace' || pane.view === 'browser'))))
+  const defaultWidth = view === 'workspace' ? DEFAULT_WORKSPACE_WIDTH : hasStrip ? DEFAULT_WIDTH : DETAILS_WIDTH
+  const panelWidth = fitWidth(width ?? defaultWidth, widthRange(hasStrip, room))
   useLayoutEffect(() => { chatRoom.hold(instant) }, [instant])
   // A view switch that changes the width holds the guest back and pins both views to
   // the final width until the panel edge has settled. It is set while rendering, so the
@@ -754,6 +830,10 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     else if (hasSubjectDetails) actions.setPanelView('details')
     else actions.closePanel?.()
   }, [leaving, workspace, pane.view, hasWs, hasSubjectDetails, canBrowse, tabState.ids.length])
+  // A work session closed or moved to the main view folds back into details.
+  useEffect(() => {
+    if (pane.view === 'work' && activeWork === null) actions.setPanelView('details')
+  }, [pane.view, activeWork])
   // The guest leaves the screen while the details view is up, and on close.
   useEffect(() => {
     if (view !== 'browser' || leaving) void actions.browserShow?.(null)
@@ -779,9 +859,9 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     // The mark flies between the drawer avatar (details view) and the strip's Bot tab:
     // up into the tab when the details view is left, back down when it returns. A switch
     // between the browser and a side chat has no drawer avatar and nothing to fly.
-    const plan = planFlight(flight.active(), next)
+    const plan = subjectRoom ? 'keep' : planFlight(flight.active(), next)
     const source = plan === 'start' ? panel.querySelector(FLIGHT_ENDS[flightStart(next)]) : null
-    const flies = plan !== 'keep' && (plan === 'reverse' || source !== null)
+    const flies = !subjectRoom && plan !== 'keep' && (plan === 'reverse' || source !== null)
     const outgoing = panel.querySelector(':scope > .bt-panel-view:not([hidden])')
     if (outgoing) {
       const ghostEl = document.createElement('div')
@@ -797,7 +877,7 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
         { opacity: 0, transform: 'scale(0.985)' },
       ], { duration: 160, easing: 'ease-out', fill: 'forwards' }).finished.catch(() => {}).finally(() => ghostEl.remove())
     }
-    if (plan === 'start' && source === null) return
+    if (subjectRoom || (plan === 'start' && source === null)) return
     intent.current = {
       plan, next, id: subjectId, at: performance.now(), end: flightEnd(next),
       node: source ? uniqueIds(source.cloneNode(true)) : null, from: source ? source.getBoundingClientRect() : null,
@@ -820,6 +900,9 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     }
     for (const name of ['openSideChat', 'newSideChat']) {
       if (actions[name]) next[name] = (...args) => { if (viewRef.current !== 'side') beginSwitchRef.current('side'); return actions[name](...args) }
+    }
+    for (const name of ['openGroupWork', 'openPanelWork']) {
+      if (actions[name]) next[name] = (...args) => { if (viewRef.current !== 'work') beginSwitchRef.current('work'); return actions[name](...args) }
     }
     for (const name of ['openFiles', 'openFile', 'openChanges', 'newTerminal']) {
       if (actions[name]) next[name] = (...args) => { if (viewRef.current !== 'workspace') beginSwitchRef.current('workspace'); return actions[name](...args) }
@@ -851,7 +934,7 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     const panel = root.current
     const grip = event.currentTarget
     grip.setPointerCapture?.(event.pointerId)
-    const range = widthRange(view, room)
+    const range = widthRange(hasStrip, room)
     const from = { x: event.clientX, width: panelWidth }
     let next = panelWidth
     setDragging(true)
@@ -889,15 +972,14 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     for (const name of ends) grip.addEventListener(name, onEnd)
   }
 
-  const hasStrip = panelHasStrip(canBrowse, tabState.ids.length, sideChats.length, taskEntry !== undefined, wsTabs.length)
-    || (workspace !== undefined && (!hasSubjectDetails || (leaving && (pane.view === 'workspace' || pane.view === 'browser'))))
   return h('aside', {
     ref: root, className: 'bt-panel', 'data-view': view,
     'aria-label': view === 'browser' ? (bot ? t("{name}'s browser", { name: bot.name }) : t('Browser'))
-      : view === 'side' ? t('Side chat')
-        : view === 'task' && taskEntry ? taskEntry.title
-          : view === 'workspace' ? (activeWsTab?.label || t('Workspace'))
-            : t('Conversation details'),
+      : view === 'work' && activeWorkInfo ? `${activeWorkInfo.bot.name} · ${activeWorkInfo.room.name}`
+        : view === 'side' ? t('Side chat')
+          : view === 'task' && taskEntry ? taskEntry.title
+            : view === 'workspace' ? (activeWsTab?.label || t('Workspace'))
+              : t('Conversation details'),
     'data-leaving': leaving || undefined, 'aria-hidden': leaving || undefined, 'data-settling': settling || undefined,
     'data-instant': instant || undefined, 'data-dragging': dragging || undefined, 'data-overlay': overlay || undefined, style: { '--bt-panel-w': `${panelWidth}px` },
     onAnimationEnd: (event) => { if (event.target === event.currentTarget) setLanded(true) },
@@ -907,9 +989,9 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
     // pages underneath (the chat, the guest) see no pointer.
     dragging ? createPortal(h('div', { className: 'bt-drag-shield', 'aria-hidden': true }), document.body) : null,
     hasStrip ? h(PanelStrip, {
-      bot, roomSubject, subject: pane.id, browserOwner, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, task: taskEntry,
+      bot, roomSubject: subjectRoom, subjectRoom, roster, subject: pane.id, browserOwner, view, ids: tabState.ids, active, sides: sideChats, side: pane.side, task: taskEntry, works: workIds, work: activeWork, activeWorkInfo,
       workspace, hasSubjectDetails: hasSubjectDetails || workspace === undefined,
-      canBrowse, reading, onView: switchView, actions: panelActions, useBrowserPages,
+      canBrowse, canSide: !subjectRoom && Boolean(bot), reading, onView: switchView, actions: panelActions, useBrowserPages,
     }) : null,
     hasWs
       ? h('div', { key: 'workspace', className: 'bt-panel-view bt-panel-workspace', hidden: view !== 'workspace' },
@@ -919,6 +1001,8 @@ export function BotPanel({ pane, leaving, room, overlay, roster, actions, useSes
       ? (!hasWs ? h('div', { key: 'workspace-empty', className: 'bt-panel-view bt-panel-workspace' }) : null)
       : view === 'browser' && browserOwner
         ? h(BrowserView, { key: `browser:${active}`, bot, ownerId: browserOwner, tabId: active, leaving, landed: landed && !settling, actions, useBrowserPages, hold })
+        : view === 'work' && activeWork && activeWorkInfo
+          ? h(WorkSessionView, { key: `work:${activeWork}`, workSessionId: activeWork, info: activeWorkInfo, useSessions, SessionProvider, renderSlot, actions: panelActions })
         : view === 'side' && sideChat
           ? h('div', { key: `side:${sideChat.id}`, className: 'bt-panel-view' }, h(SideChatView, { subject: pane.id, chat: sideChat, roster, actions: panelActions }))
           : view === 'task' && taskEntry && taskBot
@@ -965,7 +1049,15 @@ export const BROWSER_CSS = `
 .bt-ptab-new:active{transform:scale(.94)}
 .bt-ptab-new svg{width:15px;height:15px}
 .bt-ptab-ind{position:absolute;top:4px;bottom:4px;border-radius:8px;background:var(--bt-hover);opacity:0;pointer-events:none;z-index:0;transition:opacity .15s ease}
+.bt-ptab-expand{flex:none;width:28px;height:32px;border-radius:8px;color:var(--bt-ink-3)}
+.bt-ptab-expand:hover{color:var(--bt-ink)}
+.bt-ptab-expand svg{width:15px;height:15px}
 .bt-ptab-close{flex:none;margin-left:auto}
+.bt-panel-work{position:relative;min-width:0;overflow:hidden}
+.bt-panel-work>[data-conversation-content],.bt-panel-work>[class*="_root"]{flex:1;min-height:0;width:100%}
+.bt-panel-work [class*="_scroll"]:has(> [class*="_column"]){padding-top:14px!important}
+.bt-panel-work .bt-voice{display:none!important}
+.bt-work-loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--bt-ink-3)}
 .bt-panel-ghost{position:absolute;right:0;overflow:hidden;pointer-events:none;z-index:2}
 .bt-panel-ghost>.bt-panel-view{position:absolute;inset:0}
 .bt-panel-view{flex:1;min-height:0;display:flex;flex-direction:column;animation:bt-panel-view-in .22s cubic-bezier(.16,1,.3,1)}

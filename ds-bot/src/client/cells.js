@@ -38,9 +38,9 @@ export { clockLabel }
 
 const useNullUi = () => null
 const EMPTY_PICKED = []
-const ASSISTANT_ROSTER_FIELDS = ['bots', 'byId', 'roomsById', 'exchangeTurns', 'prefs']
-const TRIGGER_ROSTER_FIELDS = ['bots', 'byId', 'roomsById', 'exchangeTurns', 'prefs', 'closedCards']
-export const TOOL_ROSTER_FIELDS = ['bots', 'byId', 'rooms', 'roomsById', 'exchangeTurns', 'prefs', 'closedCards', 'questions', 'views', 'secrets', 'secretRequests', 'connectors', 'connectorRequests', 'mailRequests', 'browser', 'computer']
+const ASSISTANT_ROSTER_FIELDS = ['bots', 'byId', 'roomsById', 'groupSessionOf', 'exchangeTurns', 'prefs']
+const TRIGGER_ROSTER_FIELDS = ['bots', 'byId', 'roomsById', 'groupSessionOf', 'exchangeTurns', 'prefs', 'closedCards']
+export const TOOL_ROSTER_FIELDS = ['bots', 'byId', 'rooms', 'roomsById', 'groupSessionOf', 'exchangeTurns', 'prefs', 'closedCards', 'questions', 'views', 'secrets', 'secretRequests', 'connectors', 'connectorRequests', 'mailRequests', 'browser', 'computer']
 
 const sameStringList = (a, b) => a === b || (Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => item === b[i]))
 
@@ -386,14 +386,15 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   const mentions = useFileMentions({ node, openFile, fileMentions, useTurnData })
   const hidden = Boolean(roster.roomsById[sessionId]) || isHiddenTurn(roster, sessionId, data.turn)
   const interleaved = hasInterleavedBlocks(data)
-  const texts = groupPart === 'reasoning' ? [] : data.blocks
+  const texts = (!interleaved && groupPart === 'reasoning') || (interleaved && groupPart === 'reasoning') ? [] : data.blocks
     .filter(block => block.kind === 'text')
     .map(block => stripToolCallTags(block.text))
     .filter(text => text.trim() !== '')
   const running = data.status === 'running'
   const textInteractionSource = data.status === 'settled' && data.finalNode?.messageId !== undefined
   const members = steps.length ? steps : [data]
-  const shown = thinkingShown(roster.prefs)
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const shown = groupWork !== undefined || thinkingShown(roster.prefs)
   const reasoning = interleaved || groupPart === 'response' || !shown ? '' : turnReasoning(steps, data)
   // A live step of the same Turn keeps the row ticking even when it sits on an
   // earlier step's cell.
@@ -409,7 +410,7 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
     const segments = stepSegments(data)
     const relays = relaysBefore(contexts, steps, data)
     if (segments.length === 0 && relays.length === 0) return h(CellEmpty)
-    const selfBot = roster.byId[sessionId]
+    const selfBot = roster.byId[sessionId] ?? groupWork?.bot
     const selfId = selfBot?.id ?? sessionId
     const speaker = layoutOf(roster.prefs) === 'flat' ? selfBot : undefined
     const head = speaker !== undefined && opensReply(steps, data, shown)
@@ -461,10 +462,11 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   const relays = relayPart(data, groupPart) ? relaysBefore(contexts, steps, data) : []
   const activity = groupPart === 'response' ? [] : stepActivity(data)
   if (texts.length === 0 && !reasoning && relays.length === 0 && activity.length === 0) return h(CellEmpty)
-  const selfId = roster.byId[sessionId]?.id ?? sessionId
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot
+  const selfId = selfBot?.id ?? sessionId
   // The flat layout heads a reply with who speaks, once per Turn: in the step that opens
   // it, in that step's reasoning part when the reasoning shows there.
-  const speaker = layoutOf(roster.prefs) === 'flat' ? roster.byId[sessionId] : undefined
+  const speaker = layoutOf(roster.prefs) === 'flat' ? selfBot : undefined
   const head = speaker !== undefined && opensReply(steps, data, shown)
     && (reasoning !== '' || (texts.length > 0 && !(groupPart === 'response' && shown && turnReasoning(steps, data) !== '')))
   return h(Fragment, null,
@@ -643,8 +645,9 @@ function memoryFailure(code) {
 // refusal and a write that failed changed nothing, and say so, with the way
 // into the memory panel.
 function MemoryEvent({ sessionId, scope, tool, result, failed, code, roster, actions, findBot }) {
-  const self = roster.byId[sessionId]
-  const room = roster.roomsById[sessionId]
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const self = roster.byId[sessionId] ?? groupWork?.bot
+  const room = roster.roomsById[sessionId] ?? groupWork?.room
   const named = String(scope ?? '').trim()
   const team = MEMORY_TEAM.test(named)
   const other = team || named === '' ? undefined : findBot(named)
@@ -843,8 +846,9 @@ export function EarlierParts({ sessionId, roster, actions, openFile, renderUserT
     const mine = generation.current
     // The host numbers a page by the same part index: cursor.part, or the part
     // before this one. A group's own Session chains `room.ownParts` + `sessionId`.
+    const groupWork = roster.groupSessionOf?.[sessionId]
     const room = roster.roomsById[sessionId]
-    const owner = roster.byId[sessionId] ?? (room === undefined ? undefined : { parts: room.ownParts, sessionId: room.sessionId })
+    const owner = roster.byId[sessionId] ?? (groupWork ? { parts: groupWork.room.memberParts?.[groupWork.bot.id] ?? [], sessionId } : room === undefined ? undefined : { parts: room.ownParts, sessionId: room.sessionId })
     const partIndex = partIndexOf(owner, sessionId, cursor)
     busy.current = true
     setView(current => ({ ...current, loading: true, failed: false }))
@@ -907,10 +911,22 @@ export function EarlierParts({ sessionId, roster, actions, openFile, renderUserT
 // A Bot chat's entries as the host lists them (the `earlier` and `chat` endpoints): the
 // Bot's messages in a row are one block, and a thin line marks where a part begins.
 // `clock` adds the time separators: one above the first entry, and one after each pause.
+const roomPromptText = (raw) => {
+  const lines = String(raw ?? '').split('\n')
+  const body = lines.filter((line, index) => !(index === 0 && line.startsWith('[Group chat '))
+    && !line.startsWith('Reply directly in this group')
+    && !line.startsWith('When you need tools, start calling'))
+  return body.join('\n').trim()
+}
+
 export function ChatRows({ items, sessionId, roster, actions, useUi, clock = false, openFile, onBtwDelete, renderUserAttachments, renderUserText }) {
-  const selfId = roster.byId[sessionId]?.id
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot
+  const selfId = selfBot?.id
+  const showThink = groupWork !== undefined || thinkingShown(roster.prefs)
   const rows = []
   for (const item of items) {
+    if (item.kind === 'think' && !showThink) continue
     const last = rows.at(-1)
     if (item.kind === 'divider' && last?.kind === 'divider') {
       // Collapse consecutive dividers from empty parts into one, keeping the latest start time.
@@ -918,13 +934,28 @@ export function ChatRows({ items, sessionId, roster, actions, useUi, clock = fal
     } else if (item.kind === 'bot' && last?.kind === 'bot') {
       last.texts.push(item.text)
       last.end = item.time
-    } else rows.push(item.kind === 'bot' ? { kind: 'bot', texts: [item.text], time: item.time, end: item.time } : item)
+    } else if (item.kind === 'think' && last?.kind === 'think' && last.turn === item.turn) {
+      last.text = `${last.text}\n\n${item.text}`
+      if (typeof item.ms === 'number') last.ms = item.ms
+      last.end = item.time
+    } else if (item.kind === 'activity' && last?.kind === 'activity' && last.turn === item.turn) {
+      last.lines.push(...(item.lines ?? []))
+      last.end = item.time
+    } else if (item.kind === 'bot') {
+      rows.push({ kind: 'bot', texts: [item.text], time: item.time, end: item.time })
+    } else if (item.kind === 'think') {
+      rows.push({ ...item, end: item.time })
+    } else if (item.kind === 'activity') {
+      rows.push({ ...item, lines: [...(item.lines ?? [])], end: item.time })
+    } else {
+      rows.push(item)
+    }
   }
   let before
   return rows.flatMap((row, index) => {
     // Pages are prepended, so a row keeps its distance from the end.
     const key = rows.length - index
-    const shown = chatRow(row, key, { sessionId, selfId, roster, actions, useUi, openFile, onBtwDelete, renderUserAttachments, renderUserText })
+    const shown = chatRow(row, key, { sessionId, selfId, selfBot, roster, actions, useUi, openFile, onBtwDelete, renderUserAttachments, renderUserText })
     // A part's first entry shows its time under the part's line, as a chat's first one does.
     if (row.kind === 'divider') {
       before = undefined
@@ -937,10 +968,17 @@ export function ChatRows({ items, sessionId, roster, actions, useUi, clock = fal
 }
 
 // `useUi` gives a block its reactions and its Reply tool.
-function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, openFile, onBtwDelete, renderUserAttachments, renderUserText }) {
+function chatRow(row, key, { sessionId, selfId, selfBot, roster, actions, useUi, openFile, onBtwDelete, renderUserAttachments, renderUserText }) {
   switch (row.kind) {
     case 'divider': return h(PartLine, { key, time: row.time })
-    case 'user': return h(EarlierUser, { key, row, sessionId, roster, actions, renderUserAttachments, renderUserText })
+    case 'user':
+    case 'room-prompt': return h(EarlierUser, { key, row, sessionId, roster, actions, renderUserAttachments, renderUserText })
+    case 'activity':
+      return row.lines?.length
+        ? h(ActivityFold, { key, lines: row.lines, live: false, viewKey: `${sessionId}:earlier-act:${row.seq ?? key}` })
+        : null
+    case 'think':
+      return h(ThinkingRow, { key, text: row.text, live: false, ms: row.ms, viewKey: `${sessionId}:earlier:${row.seq ?? key}`, textInteractionSource: true })
     case 'answer': return h(AnsweredReply, { key, node: { data: row } })
     // A question or view card closed without an answer on it.
     case 'closed': return row.view === undefined
@@ -950,7 +988,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, openFile
     case 'view': return h(WidgetCell, { key, sessionId, callId: row.callId, args: { text: name => name === 'title' ? row.title : undefined, value: name => name === 'view' ? row.view : undefined }, done: true, isError: false, roster, actions })
     case 'bot': {
       const bubbles = h(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : undefined, msgKey: useUi ? `${sessionId}:${row.time}` : undefined, useUi, fold: FOLD_HUGE, textInteractionSource: true })
-      const speaker = layoutOf(roster.prefs) === 'flat' ? roster.byId[selfId] : undefined
+      const speaker = layoutOf(roster.prefs) === 'flat' ? (roster.byId[selfId] ?? selfBot) : undefined
       return speaker ? h(Fragment, { key }, h(SpeakerHead, { bot: speaker, time: row.time }), bubbles) : bubbles
     }
     case 'btw': return h(BtwCardView, { key, card: row.card, sessionId, actions, onDeleted: onBtwDelete })
@@ -991,8 +1029,9 @@ export function TriggerCell({ node, sessionId, openFile, useRoster, useSessions,
   const roster = useRosterPick(useRoster, TRIGGER_ROSTER_FIELDS)
   const data = node.data
   const source = data.source !== null && typeof data.source === 'object' ? data.source : {}
+  const groupWork = roster.groupSessionOf?.[sessionId]
   // Team state (exchanges) is keyed by the Bot id; Session state by the part shown.
-  const selfId = roster.byId[sessionId]?.id ?? sessionId
+  const selfId = (roster.byId[sessionId] ?? groupWork?.bot)?.id ?? sessionId
   // A resumed handoff keeps the relayed message's source, but it opens a part, not a run.
   // A deferred request was already shown where the Bot read it mid-turn; the turn
   // that answers it adds no second line.
@@ -1029,6 +1068,11 @@ export function TriggerCell({ node, sessionId, openFile, useRoster, useSessions,
     if (source.kind === 'bot') {
       // A part opens with its handoff package, so the earlier parts go right above it.
       if (source.handoff === true) return h(EarlierParts, { sessionId, roster, actions, openFile })
+      // In a member's group work session, show the group prompt that opened the turn.
+      if (groupWork !== undefined && source.role === 'room' && !deferred) {
+        const excerpt = roomPromptText(contentText(data.content))
+        return excerpt === '' ? null : h(EarlierUser, { row: { text: excerpt, time: data.time }, sessionId, roster, actions })
+      }
       // Group turns belong to the group chat; the member's own chat stays one-to-one.
       // Background task handoff notices and computer handback notices are model-only context.
       if (source.role === 'kickoff' || source.role === 'room' || source.role === 'goal' || source.role === 'task-handoff' || source.role === 'handback') return null
@@ -1585,7 +1629,7 @@ function renderCall(call, { sessionId, roster, actions, useRoster, useUi, useWor
   const tool = toolName(call)
   const done = call.kind === 'tool-result'
   const { text: arg, value: argValue } = toolArgs(call)
-  const self = roster.byId[sessionId]
+  const self = roster.byId[sessionId] ?? roster.groupSessionOf?.[sessionId]?.bot
   switch (tool) {
     case 'message_bot': {
       const target = findBot(arg('to')) ?? { name: arg('to') ?? '…', color: 'gray' }
@@ -1697,12 +1741,24 @@ function renderCall(call, { sessionId, roster, actions, useRoster, useUi, useWor
   }
 }
 
+function describeToolCall(call) {
+  const name = String(toolName(call) ?? '')
+  const { text: arg } = toolArgs(call)
+  const cmd = [arg('command'), arg('cmd')].find(value => typeof value === 'string' && value.trim() !== '')
+  if (cmd) return `${name} \`${cmd.trim().slice(0, 140)}\``
+  const target = [arg('file_path'), arg('path'), arg('pattern'), arg('query'), arg('url'), arg('description')]
+    .find(value => typeof value === 'string' && value.trim() !== '')
+  return target ? `${name} \`${target.trim().slice(0, 140)}\`` : name
+}
+
 export function ToolCell({ node, sessionId, openFile, useRoster, useUi, useWork, useHeldCards, useBrowserHolds, useBrowserTabs, useBrowserPages, useComputer, actions }) {
   const roster = useRosterPick(useRoster, TOOL_ROSTER_FIELDS)
   const heldCards = useHeldCards?.(state => state[sessionId])
   const root = node.data.root
   const turn = node.location?.turn?.turn ?? root.turn
   const hidden = isHiddenTurn(roster, sessionId, turn)
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const selfBot = roster.byId[sessionId] ?? groupWork?.bot
   const findBot = nameOrId => roster.byId[nameOrId] ?? roster.bots.find(bot => bot.name.toLowerCase() === String(nameOrId ?? '').toLowerCase())
   const closed = roster.closedCards?.[sessionId]
   // Hidden Bot-to-Bot turns keep their own calls out of the chat, except a question
@@ -1711,13 +1767,25 @@ export function ToolCell({ node, sessionId, openFile, useRoster, useUi, useWork,
     ? callTree(root).filter(call => (toolName(call) === 'ask_user' || toolName(call) === 'show_view') && call.callId && closed?.[call.callId] !== undefined)
     : callTree(root)
   const drawn = calls.filter(call => DRAWN.has(toolName(call)) || isComputerCall(toolName(call)))
+  const workLines = groupWork !== undefined && !hidden
+    ? calls
+      .filter((call) => {
+        const name = toolName(call)
+        return Boolean(name) && name !== 'run_code' && !DRAWN.has(name) && !isComputerCall(name)
+      })
+      .map(describeToolCall)
+    : []
   // The newest call still running names the work, so a program reads as the tool it is in.
   const running = root.kind === 'tool-result' ? undefined : calls.findLast(call => call.kind !== 'tool-result')
-  const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, roster.byId[sessionId]) : null
+  const note = running ? toolActivity(toolName(running), toolArgs(running).text, findBot, selfBot) : null
   // A running tool shows only as the activity row's phrase.
   useLiveNote(actions, sessionId, `tool:${root.callId ?? node.key}`, note)
   useShownCards(actions, sessionId, drawn.filter(call => (CARDS.has(toolName(call)) || isComputerCall(toolName(call))) && call.callId).map(call => call.callId))
-  if (drawn.length === 0) return h(CellEmpty)
+  if (drawn.length === 0 && workLines.length === 0) return h(CellEmpty)
   const env = { sessionId, roster, actions, useRoster, useUi, useWork, findBot, heldCards, openFile, hooks: { useBrowserHolds, useBrowserTabs, useBrowserPages, useComputer } }
-  return h(Fragment, null, drawn.map((call, index) => h(Fragment, { key: call.callId ?? index }, renderCall(call, env))))
+  return h(Fragment, null,
+    workLines.length > 0
+      ? h(ActivityFold, { lines: workLines, live: running !== undefined, viewKey: `${sessionId}:tool-act:${root.callId ?? node.key}` })
+      : null,
+    drawn.map((call, index) => h(Fragment, { key: call.callId ?? index }, renderCall(call, env))))
 }

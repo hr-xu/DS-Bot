@@ -3996,6 +3996,40 @@ export function install(rt) {
     })()
   })
 
+  // Strips model-only `<signature>` headers and splits local-agent `▸ ` activity lines
+  // from reasoning text, matching client/turn-reasoning.js for archived/earlier pages.
+  const stripSignature = (text) => {
+    if (text[0] !== '<') return text
+    if ('<signature>'.startsWith(text)) return ''
+    if (!text.startsWith('<signature>')) return text
+    const end = text.indexOf('</signature>')
+    return end === -1 ? '' : text.slice(end + '</signature>'.length).replace(/^(\r?\n)+/, '')
+  }
+  const splitReasoning = (raw) => {
+    const lines = stripSignature(String(raw ?? '')).split('\n')
+    const activity = lines.filter(line => line.startsWith('▸ ')).map(line => line.slice(2).trim()).filter(Boolean)
+    const think = lines.filter(line => !line.startsWith('▸ ')).join('\n').trim()
+    return { think, activity }
+  }
+  const roomPromptExcerpt = (raw) => {
+    const lines = String(raw ?? '').split('\n')
+    // Drop the `[Group chat ...]` header and trailing `[Reply ...]` / `Still at work` boilerplate.
+    const body = lines.filter((line, index) => !(index === 0 && line.startsWith('[Group chat '))
+      && !line.startsWith('Reply directly in this group')
+      && !line.startsWith('When you need tools, start calling'))
+    return body.join('\n').trim() || String(raw ?? '').trim()
+  }
+  const describeEarlierTool = (data) => {
+    const name = String(data?.name ?? '')
+    let args
+    try { args = typeof data?.arguments === 'string' ? JSON.parse(data.arguments) : (data?.arguments ?? {}) } catch { args = {} }
+    const cmd = [args?.command, args?.cmd].find(v => typeof v === 'string' && v.trim() !== '')
+    if (cmd) return `${name} \`${cmd.trim().slice(0, 140)}\``
+    const target = [args?.file_path, args?.path, args?.pattern, args?.query, args?.url, args?.description]
+      .find(v => typeof v === 'string' && v.trim() !== '')
+    return target ? `${name} \`${target.trim().slice(0, 140)}\`` : name
+  }
+
   // Earlier parts of a Bot's own chat, newest page first, for the chat to show above
   // the current part as one conversation.
   const EARLIER_PAGE = 60
@@ -4007,6 +4041,8 @@ export function install(rt) {
 
   function displayItems(partId, events, session, seedTurn, options = {}) {
     const hidden = options.taskView === true ? new Set() : new Set(state.exchangeTurns[partId] ?? [])
+    const pastOwner = rt.pastOwners?.get(partId)
+    const inGroupWork = Boolean(rt.groupOwners?.has(partId) || (pastOwner?.botId !== undefined && pastOwner?.roomId !== undefined))
     // Files a turn presented, attached to its closing Bot row so the phone can save
     // them: the card shows name and type, the save action names seq and index.
     const presented = []
@@ -4054,6 +4090,11 @@ export function install(rt) {
           && (live.turn === undefined || eventTurn === undefined || eventTurn === live.turn)
         if (options.taskView !== true && (turnKind === 'bot' || isLiveBotTurn) && isSilentTurnText(textOf(content))) continue
         for (const block of content) {
+          if (block?.type === 'reasoning' && typeof block.text === 'string' && block.text.trim() !== '') {
+            const { think, activity } = splitReasoning(block.text)
+            if (activity.length > 0) stamp(event, { kind: 'activity', lines: activity, time: event.time })
+            if (think !== '') stamp(event, { kind: 'think', text: think, time: event.time })
+          }
           if (block?.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') stamp(event, { kind: 'bot', text: block.text, time: event.time })
         }
         continue
@@ -4107,6 +4148,10 @@ export function install(rt) {
           } else if (shown.error === undefined && closedView !== undefined) {
             items.push({ kind: 'closed', closed: closedView, title: shown.title, view, callId, time: event.time })
           }
+          continue
+        }
+        if (inGroupWork && typeof named === 'string' && named !== '' && named !== 'run_code' && named !== 'group_relay' && named !== 'request_secret') {
+          stamp(event, { kind: 'activity', lines: [describeEarlierTool(event.data)], time: event.time })
         }
         continue
       }
@@ -4185,6 +4230,9 @@ export function install(rt) {
       } else if (options.taskView === true && source?.kind === SOURCE_KIND && source.role === 'request') {
         const body = stripRelayHeader(textOf(event.data.content))
         if (body !== '') stamp(event, { kind: 'task-brief', name: source.senderName ?? null, text: body, time: event.time })
+      } else if (inGroupWork && source?.kind === SOURCE_KIND && source.role === 'room' && source.handoff !== true && source.deferred !== true) {
+        const excerpt = roomPromptExcerpt(textOf(event.data.content))
+        if (excerpt !== '') stamp(event, { kind: 'room-prompt', text: excerpt, time: event.time })
       } else if (source?.kind === SOURCE_KIND && source.handoff !== true && source.deferred !== true && source.silent !== true && ['request', 'reply', 'report', 'stopped', 'ask_back', 'answer'].includes(source.role)) {
         stamp(event, { kind: 'event', role: source.role, botId: source.senderSessionId ?? null, name: source.senderName ?? null, roomId: source.roomId ?? null, time: event.time })
       } else if (source?.kind === 'schedule') {
@@ -4255,6 +4303,12 @@ export function install(rt) {
       }
     }
     const items = displayItems(part.sessionId, events, agent?.session, seedTurn, options)
+    const thinkDurations = pageThinkingMs(events)
+    for (const [closedTurn, ms] of thinkDurations) {
+      if (typeof ms !== 'number' || ms <= 0) continue
+      const row = [...items].reverse().find(item => item.kind === 'think' && item.turn === closedTurn)
+      if (row !== undefined) row.ms = ms
+    }
     if (options.taskView === true) {
       for (const item of items) {
         if (item.sessionId === undefined) item.sessionId = part.sessionId
@@ -4275,11 +4329,14 @@ export function install(rt) {
 
   async function earlierPage(sessionId, cursor) {
     const past = rt.pastOwners.get(sessionId)
+    const groupMember = rt.groupOwners?.get(sessionId) ?? (past?.botId !== undefined && past?.roomId !== undefined ? past : undefined)
     // A group's own Session is its own chain of parts like a Bot's own chat: its
     // current Session and every earlier `room.parts` page the same "Load earlier".
-    const roomId = rt.roomOwners?.get(sessionId) ?? (past?.botId === undefined ? past?.roomId : undefined)
-    const botId = roomId === undefined ? rt.chatOwners.get(sessionId) ?? (past?.roomId === undefined ? past?.botId : undefined) : undefined
-    const parts = roomId === undefined ? (botId === undefined ? [] : partsOfThread(botId, sessionId)) : partsOf(undefined, roomId)
+    const roomId = groupMember === undefined ? (rt.roomOwners?.get(sessionId) ?? (past?.botId === undefined ? past?.roomId : undefined)) : undefined
+    const botId = groupMember === undefined && roomId === undefined ? (rt.chatOwners.get(sessionId) ?? (past?.roomId === undefined ? past?.botId : undefined)) : undefined
+    const parts = groupMember !== undefined
+      ? partsOf(groupMember.botId, groupMember.roomId)
+      : roomId === undefined ? (botId === undefined ? [] : partsOfThread(botId, sessionId)) : partsOf(undefined, roomId)
     const at = parts.findIndex(part => part.sessionId === sessionId)
     let index = Number.isInteger(cursor?.part) ? cursor.part : at - 1
     if (at <= 0 || index < 0 || index >= at) return { items: [], cursor: null, startedAt: parts[at]?.startedAt ?? null }
