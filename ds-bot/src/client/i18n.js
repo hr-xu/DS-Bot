@@ -496,6 +496,7 @@ const ZH = {
   'Couldn’t steer the queued messages. Try again.': '插话发送失败，请重试。',
   '{n} queued messages': '{n} 条排队消息',
   'Sending…': '发送中…',
+  Queued: '已排队',
   'Queued image': '排队消息图片',
   'Queued file {name}': '排队文件 {name}',
   'Edit queued message': '编辑排队消息',

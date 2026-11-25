@@ -114,6 +114,7 @@ function RowButton({ label, title, disabled, onClick, children }) {
 // app's DesktopQueueDock so defaults, labels, keyboard handling, and row states stay aligned.
 export function QueueDockPresenter({
   queue,
+  pendingSteers = EMPTY_QUEUE,
   pendingQueue = EMPTY_QUEUE,
   running = false,
   queueMutable = true,
@@ -125,7 +126,7 @@ export function QueueDockPresenter({
   className = 'bt-queue-dock',
   actionsClassName = 'bt-queue-actions',
 }) {
-  const rowCount = queue.length + pendingQueue.length
+  const rowCount = queue.length + pendingSteers.length + pendingQueue.length
   const [editing, setEditing] = useState(null)
   const [busy, setBusy] = useState(null)
   const [collapsed, setCollapsed] = useState(true)
@@ -174,7 +175,7 @@ export function QueueDockPresenter({
       rowCount > 1 && h('button', { type: 'button', className: 'bt-queue-head', 'aria-controls': listId, 'aria-expanded': expanded, disabled: interactionActive, onClick: () => setCollapsed(value => !value) },
         h('span', { className: 'bt-queue-lead', 'aria-hidden': true }, h(QueueIcon)),
         h('span', { className: 'bt-queue-count' }, t('{n} queued messages', { n: rowCount })),
-        !listVisible && pendingQueue.length > 0 && h('span', { className: 'bt-queue-status', role: 'status' }, t('Sending…')),
+        !listVisible && (pendingQueue.length > 0 || pendingSteers.length > 0) && h('span', { className: 'bt-queue-status', role: 'status' }, t('Sending…')),
         h('span', { className: 'bt-queue-chev', 'aria-hidden': true }, expanded ? h(ChevronDownIcon) : h(ChevronUpIcon))),
       h('ul', { id: listId, className: 'bt-queue-list', hidden: !listVisible },
         listVisible && queue.map((row) => {
@@ -192,6 +193,7 @@ export function QueueDockPresenter({
                     ? h(QueueThumb, { key: `${item.attachment.attachmentId ?? index}:${index}`, attachment: item.attachment, loadImage, label: t('Queued image') })
                     : h(QueueFile, { key: `${item.attachment.attachmentId ?? item.attachment.name}:${item.attachment.name}:${index}`, attachment: item.attachment, label: t('Queued file {name}', { name: item.attachment.name }) }))),
                 h(Preview, { text: plain, renderFactorySlot })),
+            running && editing?.id !== row.id && h('span', { className: 'bt-queue-status', role: 'status' }, t('Queued')),
             queueMutable && h('div', { className: actionsClassName },
               editing?.id === row.id
                 ? h(Fragment, null,
@@ -202,6 +204,17 @@ export function QueueDockPresenter({
                   h(RowButton, { label: t('Edit queued message'), title: text === null ? t('Contains non-text content, so editing is not supported yet') : undefined, disabled: busy !== null || text === null, onClick: () => { if (text !== null) setEditing({ id: row.id, text }) } }, h(PencilIcon)),
                   h(RowButton, { label: t('Delete queued message'), disabled: busy !== null, onClick: () => { void applyAction(row.id, { kind: 'remove' }, t('Couldn’t delete the queued message — it may have started already.')) } }, h(TrashIcon)),
                   h(RowButton, { label: t('Steer queued message'), title: running ? undefined : t('Only while a turn is running'), disabled: busy !== null || !running, onClick: () => { void applyAction(row.id, { kind: 'steer' }, t('Couldn’t steer the queued message. Try again.')) } }, h(ArrowUpIcon)))))
+        }),
+        listVisible && pendingSteers.map((row) => {
+          const attachments = queueAttachments(row.content)
+          return h('li', { key: `step:${row.id}`, className: 'bt-queue-row bt-queue-pending' },
+            rowCount === 1 && h('span', { className: 'bt-queue-lead', 'aria-hidden': true }, h(QueueIcon)),
+            attachments.length > 0 && h('span', { className: 'bt-queue-attachments' },
+              attachments.map((item, index) => item.type === 'image'
+                ? h(QueueThumb, { key: `${item.attachment.attachmentId}:${index}`, attachment: item.attachment, loadImage, label: t('Queued image') })
+                : h(QueueFile, { key: `${item.attachment.attachmentId}:${item.attachment.name}:${index}`, attachment: item.attachment, label: t('Queued file {name}', { name: item.attachment.name }) }))),
+            h(Preview, { text: row.content.filter(block => block.type === 'text').map(block => block.text).join(''), renderFactorySlot }),
+            h('span', { className: 'bt-queue-status', role: 'status' }, t('Sending…')))
         }),
         listVisible && pendingQueue.map(submission => h('li', { key: submission.requestId, className: 'bt-queue-row bt-queue-pending' },
           rowCount === 1 && h('span', { className: 'bt-queue-lead', 'aria-hidden': true }, h(QueueIcon)),
@@ -229,15 +242,23 @@ export function QueueDock({ useSession, useProjection, updateQueue, loadImage, r
     const inChat = new Set(pendingSubmissions.filter(item => item.placement === 'transcript').map(item => item.requestId))
     return inChat.size === 0 ? rows : rows.filter(({ source }) => source === null || typeof source !== 'object' || !('rpcId' in source) || !inChat.has(source.rpcId))
   }, [inbox, pendingSubmissions])
+  const pendingSteers = useMemo(() => {
+    const rows = (inbox?.['next-step'] ?? EMPTY_QUEUE).filter(row => OWN_QUEUE_KINDS.has(row.source?.kind))
+    if (rows.length === 0) return EMPTY_QUEUE
+    const shownInChat = new Set(pendingSubmissions.filter(item => item.placement === 'transcript' || item.placement === 'steering').map(item => item.requestId))
+    const inQueue = new Set(queue.map(row => row.id))
+    return rows.filter(row => !inQueue.has(row.id) && (row.source === null || typeof row.source !== 'object' || !('rpcId' in row.source) || !shownInChat.has(row.source.rpcId)))
+  }, [inbox, pendingSubmissions, queue])
   const pendingQueue = useMemo(() => {
-    const admitted = new Set(queue.flatMap(({ source }) => (source !== null && typeof source === 'object' && 'rpcId' in source) ? [source.rpcId] : []))
+    const admitted = new Set([...queue, ...pendingSteers].flatMap(({ source }) => (source !== null && typeof source === 'object' && 'rpcId' in source) ? [source.rpcId] : []))
     return pendingSubmissions.filter(submission => submission.placement === 'queued' && !admitted.has(submission.requestId))
-  }, [pendingSubmissions, queue])
+  }, [pendingSubmissions, pendingSteers, queue])
   const running = useSession?.((s) => s.running) === true
   const queueMutable = useSession?.((s) => s.subagent === null || s.subagent === undefined || s.subagent.address?.mode === 'continuable') ?? true
-  if (queue.length + pendingQueue.length === 0) return null
+  if (queue.length + pendingSteers.length + pendingQueue.length === 0) return null
   return h(QueueDockPresenter, {
     queue,
+    pendingSteers,
     pendingQueue,
     running,
     queueMutable,

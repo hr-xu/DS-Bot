@@ -36,6 +36,7 @@ export { clockLabel }
 // Chat cells
 
 
+const STREAM_IDLE_MS = 1500
 const useNullUi = () => null
 const EMPTY_PICKED = []
 const ASSISTANT_ROSTER_FIELDS = ['bots', 'byId', 'roomsById', 'groupSessionOf', 'exchangeTurns', 'prefs']
@@ -402,8 +403,22 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   const hasAnyReasoning = interleaved ? shown && data.blocks.some(block => block.kind === 'reasoning') : reasoning !== ''
   const ms = useThinkingMs({ sessionId, turn: data.turn, settledSteps: members.filter(step => step.status !== 'running').length, skip: hidden || !hasAnyReasoning })
   const streamingText = interleaved ? data.blocks.at(-1)?.kind === 'text' && texts.length > 0 : texts.length > 0
-  // A streaming reply stands in for the activity row.
-  useLiveNote(actions, sessionId, `text:${node.key ?? data.seq}`, !hidden && running && streamingText ? { text: true } : null)
+  const textLength = texts.reduce((sum, item) => sum + item.length, 0)
+  // Step the activity row aside only while text is actively growing; if output
+  // pauses while the turn keeps running (e.g. a local CLI opening sentence before
+  // internal tool calls or thinking), restore the activity row so work stays visible.
+  const [textQuiet, setTextQuiet] = useState(false)
+  useEffect(() => {
+    if (hidden || !running || !streamingText) {
+      setTextQuiet(false)
+      return undefined
+    }
+    setTextQuiet(false)
+    const timer = setTimeout(() => setTextQuiet(true), STREAM_IDLE_MS)
+    return () => clearTimeout(timer)
+  }, [hidden, running, streamingText, textLength])
+  // A streaming reply stands in for the activity row while chunks are arriving.
+  useLiveNote(actions, sessionId, `text:${node.key ?? data.seq}`, !hidden && running && streamingText && !textQuiet ? { text: true } : null)
   if (hidden) return h(CellEmpty)
   if (interleaved) {
     if (groupPart === 'reasoning') return h(CellEmpty)

@@ -468,6 +468,8 @@ test('recorded Devin ACP team MCP sequence stays team work and starts no grace; 
   const engine = new AcpEngine('local-devin-cli', { name: 'Devin' }, { findExecutable: () => undefined })
   const session = engine.sessionFor('gb')
   session.acpSessionId = 'acp-1'
+  session.running = true
+  session.promptTurn = { cancelled: false, activeTools: new Map() }
   session.push = event => host.rt.noteLocalAgentEvent('gb', event)
 
   // Recorded Devin ACP shape: server identity arrives in _meta['cognition.ai/toolName']
@@ -515,6 +517,8 @@ test('recorded Cursor ACP anonymous MCP placeholder defers counting until provid
   const engine = new AcpEngine('local-cursor-cli', { name: 'Cursor' }, { findExecutable: () => undefined })
   const session = engine.sessionFor('gb')
   session.acpSessionId = 'acp-1'
+  session.running = true
+  session.promptTurn = { cancelled: false, activeTools: new Map() }
   session.push = event => host.rt.noteLocalAgentEvent('gb', event)
 
   // Recorded Cursor ACP team MCP sequence: placeholder opens empty, then names dsbot.
@@ -556,6 +560,12 @@ test('recorded Cursor ACP anonymous MCP placeholder defers counting until provid
   })
   assert.equal(host.rt.liveOf('gb').toolCount, 1)
   assert.equal(host.rt.liveOf('gb').localDoing?.note, 'github: message_bot')
+  // Completing the tool clears localDoing so status does not stay stuck on a finished call.
+  engine.onNotice('session/update', {
+    sessionId: 'acp-1',
+    update: { sessionUpdate: 'tool_call_update', toolCallId: otherCallId, status: 'completed' },
+  })
+  assert.equal(host.rt.liveOf('gb').localDoing, undefined)
   t.mock.timers.tick(ROOM_WORK_GRACE_MS + 10)
   await result.wait()
   assert.deepEqual(result().replies.map(reply => [reply.kind, reply.name]), [['working', 'Writer']])

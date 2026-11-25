@@ -612,6 +612,7 @@ export const ES = {
   'Couldn’t steer the queued messages. Try again.': 'No se pudieron adelantar los mensajes en cola. Inténtalo de nuevo.',
   '{n} queued messages': '{n} mensajes en cola',
   'Sending…': 'Enviando…',
+  Queued: 'En cola',
   'Queued image': 'Imagen en cola',
   'Queued file {name}': 'Archivo en cola {name}',
   'Edit queued message': 'Editar mensaje en cola',

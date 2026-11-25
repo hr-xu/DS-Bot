@@ -35,9 +35,9 @@ const { QueueDock } = module.exports
 
 const row = (id, kind, text) => ({ id, source: { kind }, content: [{ type: 'text', text }] })
 
-const dock = (nextTurn, { running = false, pendingSubmissions = [] } = {}) => QueueDock({
+const dock = (nextTurn, { running = false, pendingSubmissions = [], nextStep = [] } = {}) => QueueDock({
   useSession: selector => selector({ running, pendingSubmissions, subagent: null }),
-  useProjection: () => ({ 'next-turn': nextTurn }),
+  useProjection: () => ({ 'next-turn': nextTurn, 'next-step': nextStep }),
   updateQueue: async () => ({ ok: true }),
   loadImage: async () => 'about:blank',
   actions: { reportError: () => {} },
@@ -88,4 +88,29 @@ test('a user send still in flight shows as sending', () => {
   const { rows, texts } = collect(tree)
   assert.equal(rows.length, 1)
   assert.ok(texts.includes('Sending…'))
+})
+
+test('a queued row labels itself while a turn is running', () => {
+  const tree = dock([row('u1', 'user', 'follow up next')], { running: true })
+  const { rows, texts } = collect(tree)
+  assert.equal(rows.length, 1)
+  assert.ok(texts.includes('follow up next'))
+  assert.ok(texts.includes('Queued'))
+})
+
+test('a next-step user message without a transcript steering echo stays visible in the dock', () => {
+  const stepRow = { id: 's1', source: { kind: 'user', rpcId: 'rpc-1' }, content: [{ type: 'text', text: 'steered message' }] }
+  const visible = dock([], { running: true, nextStep: [stepRow] })
+  const got = collect(visible)
+  assert.equal(got.rows.length, 1)
+  assert.ok(got.texts.includes('steered message'))
+  assert.ok(got.texts.includes('Sending…'))
+
+  // When the transcript already shows the steering echo, the dock does not duplicate it.
+  const deduped = dock([], {
+    running: true,
+    nextStep: [stepRow],
+    pendingSubmissions: [{ requestId: 'rpc-1', placement: 'steering', text: 'steered message', attachments: [] }],
+  })
+  assert.equal(deduped, null)
 })

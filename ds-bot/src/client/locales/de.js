@@ -612,6 +612,7 @@ export const DE = {
   'Couldn’t steer the queued messages. Try again.': 'Eingereihte Nachrichten konnten nicht eingeschoben werden. Bitte erneut versuchen.',
   '{n} queued messages': '{n} eingereihte Nachrichten',
   'Sending…': 'Wird gesendet…',
+  Queued: 'Eingereiht',
   'Queued image': 'Eingereihtes Bild',
   'Queued file {name}': 'Eingereihte Datei {name}',
   'Edit queued message': 'Eingereihte Nachricht bearbeiten',

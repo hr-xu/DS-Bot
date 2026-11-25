@@ -633,6 +633,7 @@ test('Antigravity 1.5.9, as recorded: models with per-model thinking levels, con
   const session = engine.sessionFor('s1')
   const id = fixture.sessionNew.sessionId
   session.acpSessionId = id
+  session.running = true
   const { queue } = drained(session)
 
   for (const message of fixture.messages) engine.onNotice(message.method, message.params)
@@ -1120,6 +1121,63 @@ test('ACP multi-step prompt (Antigravity 1.5.9 recorded trace): counts internal 
   assert.deepEqual(out.usage, { ...usageOf(fixture.promptResult.usage), calls: 2 })
   // Single-step context is 12984, NOT the cumulative 25685 sum across both steps.
   assert.deepEqual(adapter.contextOf('s1'), { used: 12_984, size: 1_048_576, compactions: 0 })
+})
+
+test('ACP ignores session/load history replay chunks while idle, clears active tools on completion, and deduplicates identical queued ACP prompts', async (t) => {
+  const engine = new AcpEngine('local-antigravity', ENGINES['local-antigravity'], { findExecutable: () => undefined })
+  const session = engine.sessionFor('s-replay')
+  session.acpSessionId = 'acp-replay-1'
+  const { queue } = drained(session)
+
+  // Before any prompt starts (session.running === false), session/load replays must be ignored
+  // for text/thought/tool/plan, while usage_update metadata still updates context.
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'yesterday reply' } } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'yesterday thought' } } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'tool_call', toolCallId: 'old-1', kind: 'execute', status: 'in_progress', rawInput: { command: 'ls' } } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'plan', entries: [{ content: 'old step', status: 'completed' }] } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'usage_update', used: 8000, size: 1_048_576 } })
+
+  assert.deepEqual(queue, [{ type: 'context', used: 8000, size: 1_048_576 }])
+  assert.equal(session.toolCalls.size, 0)
+
+  // Once a prompt is active, parallel tools track their active status and clear when all finish.
+  queue.length = 0
+  session.running = true
+  session.promptTurn = { cancelled: false, steps: 0, lastUsed: undefined, sawStepWork: false, activeTools: new Map() }
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'tool_call', toolCallId: 'c1', kind: 'read', status: 'in_progress', locations: [{ path: 'a.js' }] } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'tool_call', toolCallId: 'c2', kind: 'execute', status: 'in_progress', rawInput: { command: 'npm test' } } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'tool_call_update', toolCallId: 'c2', status: 'completed' } })
+  engine.onNotice('session/update', { sessionId: 'acp-replay-1', update: { sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'completed' } })
+  assert.deepEqual(queue.filter(e => e.type === 'status'), [
+    { type: 'status', text: 'Read a.js', team: false },
+    { type: 'status', done: true, team: false },
+  ])
+
+  // Adapter startTurn clears stale non-request events, and sendInput deduplicates identical ACP queued prompts.
+  const adapter = makeAdapter()
+  t.after(() => adapter.dispose())
+  const prompts = []
+  const live = {
+    sessionId: 's-dedup',
+    spec: { kind: 'acp' },
+    state: 'idle',
+    stopped: false,
+    events: [{ type: 'text', text: 'stale replay' }, { type: 'permission', id: 'p1', reply: () => {} }],
+    queue: [],
+    engineSession: {},
+    engine: { prompt: (_s, blocks) => { prompts.push(blocks); return new Promise(() => {}) } },
+    push: () => {},
+  }
+  await adapter.sendInput(live, [{ type: 'text', text: 'check permissions' }])
+  assert.deepEqual(live.events.map(e => e.type), ['permission'], 'startTurn discards stale text events while preserving permission requests')
+  assert.equal(prompts.length, 1)
+  // Resending the identical prompt while this turn runs must not queue a duplicate ACP run.
+  await adapter.sendInput(live, [{ type: 'text', text: 'check permissions' }])
+  assert.equal(live.queue.length, 0)
+  // A distinct follow-up queues once, and a back-to-back duplicate of it is ignored.
+  await adapter.sendInput(live, [{ type: 'text', text: 'also check queue dock' }])
+  await adapter.sendInput(live, [{ type: 'text', text: 'also check queue dock' }])
+  assert.equal(live.queue.length, 1)
 })
 
 test('mergeUsage accumulates additive tokens and call counts without emitting calls=1 for single-step turns', () => {

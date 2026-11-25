@@ -152,6 +152,32 @@ function useRowEntrances(replacing) {
   }, [])
 }
 
+// The host work entry matching the conversation currently shown on screen.
+export function workEntryFor({ bot, groupWork, room, work }) {
+  if (work === undefined || work === null) return null
+  if (groupWork !== undefined) {
+    return work.rooms?.[groupWork.room.id]?.find(item => item.botId === groupWork.bot.id) ?? null
+  }
+  if (bot !== undefined) {
+    const entry = work.bots?.[bot.id]
+    return entry !== undefined && entry.roomId === undefined ? entry : null
+  }
+  if (room !== undefined) {
+    return work.rooms?.[room.id]?.find(item => item.self === true) ?? null
+  }
+  return null
+}
+
+// Local CLI tool work comes through host work entries (`tool: 'cli' | 'read'`
+// with `note`) rather than DSH ToolCells.
+export function localToolOf(entry, at = 0) {
+  if (entry === null || entry === undefined || entry.switching === true) return null
+  if (entry.tool !== 'cli' && entry.tool !== 'read') return null
+  const label = typeof entry.note === 'string' ? entry.note.trim() : ''
+  if (label === '') return null
+  return { label, state: entry.tool === 'read' ? 'searching' : 'working', at }
+}
+
 export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, useSession, useWork, actions }) {
   const roster = useRoster(value => value)
   const running = useSessionStatus(map => map.get(sessionId)?.running === true)
@@ -167,21 +193,29 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   const [movingBg, setMovingBg] = useState(false)
   useEffect(() => { setMovingBg(false) }, [sessionId, bgInfo?.turn])
   const pendingInput = useSession(snapshot => freshInputAt(snapshot?.pendingSubmissions, steeredAt))
-  const bot = roster.byId[sessionId] ?? roster.groupSessionOf?.[sessionId]?.bot
+  const groupWork = roster.groupSessionOf?.[sessionId]
+  const bot = roster.byId[sessionId] ?? groupWork?.bot
   const room = roster.roomsById[sessionId]
-  // The one switch the row names: a working-folder move jumps the chat to a fresh
-  // part while a turn is not running, so without it the conversation just empties.
-  const moveAt = useWork?.((work) => {
-    const entry = bot !== undefined ? work.bots?.[bot.id]
-      : room !== undefined ? work.rooms?.[room.id]?.find(item => item.self === true) : undefined
-    return entry?.switching === true && entry.folder === true && entry.roomId === undefined ? entry.since : 0
-  }) ?? 0
+  const workEntry = useWork?.(work => workEntryFor({ bot, groupWork, room, work })) ?? null
+  const switchAt = workEntry?.switching === true ? (workEntry.since ?? Date.now()) : 0
+  const switchFolder = workEntry?.folder === true
+  const localNote = running && workEntry?.switching !== true && (workEntry?.tool === 'cli' || workEntry?.tool === 'read')
+    ? String(workEntry.note ?? '').trim()
+    : ''
+  const localNoteRef = useRef({ note: '', at: 0 })
+  if (localNote === '') {
+    localNoteRef.current = { note: '', at: 0 }
+  } else if (localNoteRef.current.note !== localNote) {
+    localNoteRef.current = { note: localNote, at: Date.now() }
+  }
+  const localTool = running ? localToolOf(workEntry, localNoteRef.current.at) : null
   const entries = useMemo(() => Object.values(JSON.parse(liveKey)), [liveKey])
   const streaming = entries.some(entry => entry.text)
-  const tools = entries.filter(entry => !entry.text).sort((a, b) => a.at - b.at)
+  const nativeTools = entries.filter(entry => !entry.text).sort((a, b) => a.at - b.at)
+  const tools = nativeTools.length > 0 ? nativeTools : localTool !== null ? [localTool] : nativeTools
   // Group chats show who is typing on their own while members speak.
   const relaying = tools.some(entry => entry.relay)
-  const visible = moveAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room })
+  const visible = switchAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room })
   const tool = tools.at(-1)
   const inputRef = useRef(0)
   // A steer keeps the run going, so nothing else resets the row: fresh input is
@@ -189,7 +223,7 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   const inputAt = Math.max(inputRef.current, pendingInput)
   inputRef.current = inputAt
   const want = !visible ? null
-    : moveAt !== 0 ? { key: 'move', label: t('Switching working folder'), state: 'thinking' }
+    : switchAt !== 0 ? { key: switchFolder ? 'move' : 'switch', label: switchFolder ? t('Switching working folder') : t('Moving to a fresh conversation'), state: 'thinking' }
       : inputAt > (tool?.at ?? 0)
         ? { key: `input:${inputAt}`, pool: PHRASES.thinking, state: 'thinking' }
         : tool ? { key: tool.label ? `tool:${tool.label}` : 'working', label: tool.label, pool: PHRASES.working, state: tool.state ?? 'working' }
@@ -237,9 +271,9 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   useEffect(() => { if (!running) actions.clearLive(sessionId) }, [running, sessionId])
   // Only rows that take the activity row's place grow out of it.
   useRowEntrances(() => leaving.current || Date.now() - endedAt.current < 300)
-  const host = useRunningHost(running || moveAt !== 0)
+  const host = useRunningHost(running || switchAt !== 0)
   if (!host || phase === null || !shown) return null
-  const showBgAction = bot !== undefined && moveAt === 0 && bgInfo !== undefined && typeof actions?.moveToBackground === 'function'
+  const showBgAction = bot !== undefined && switchAt === 0 && bgInfo !== undefined && typeof actions?.moveToBackground === 'function'
   const moveToBg = () => {
     if (movingBg || !bgInfo) return
     setMovingBg(true)
@@ -254,7 +288,7 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
       bot ? h(BotMark, { bot, size: 28, state: markState.current, live: true, pokeable: true }) : h(RoomAvatar, { room, roster, size: 28 })),
     h('span', { className: 'bt-typing-text', 'aria-hidden': true },
       h('span', { key: `${shown.key}:${shown.at}`, className: 'bt-typing-label' }, h(Shimmer, null, `${shown.text}…`)),
-      h(Elapsed, { at: moveAt !== 0 ? moveAt : Math.max(turnAt ?? runAt.current, inputAt), className: 'bt-typing-time' })),
+      h(Elapsed, { at: switchAt !== 0 ? switchAt : Math.max(turnAt ?? runAt.current, inputAt), className: 'bt-typing-time' })),
     showBgAction
       ? h('button', {
           type: 'button',

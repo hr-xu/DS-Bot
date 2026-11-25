@@ -612,6 +612,7 @@ export const KO = {
   'Couldn’t steer the queued messages. Try again.': '대기 중인 메시지를 즉시 전송하지 못했습니다. 다시 시도하세요.',
   '{n} queued messages': '대기 중인 메시지 {n}개',
   'Sending…': '전송 중…',
+  Queued: '대기 중',
   'Queued image': '대기 중인 이미지',
   'Queued file {name}': '대기 중인 파일 {name}',
   'Edit queued message': '대기 중인 메시지 편집',

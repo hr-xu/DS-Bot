@@ -15,7 +15,7 @@ const { JSDOM } = createRequire(join(process.env.DSH_HARNESS ?? join(PLUGIN, '..
 const { outputFiles } = await build({
   stdin: {
     contents: [
-      "export { findHost, releaseHost, rowVisible, freshInputAt } from './src/client/activity-row.js'",
+      "export { findHost, releaseHost, rowVisible, freshInputAt, workEntryFor, localToolOf } from './src/client/activity-row.js'",
       "export { clientErrors } from './src/client/diagnostics.js'",
     ].join('\n'),
     resolveDir: PLUGIN,
@@ -43,7 +43,7 @@ runInNewContext(outputFiles[0].text, {
   cancelAnimationFrame: id => clearTimeout(id),
   require: name => (name === 'react' ? react : name === 'react-dom' ? { createPortal: node => node } : {}),
 })
-const { findHost, releaseHost, rowVisible, freshInputAt, clientErrors } = module.exports
+const { findHost, releaseHost, rowVisible, freshInputAt, workEntryFor, localToolOf, clientErrors } = module.exports
 
 // The shell renders its running status inside the flow, before the pending steering
 // rows, so hosting the row there puts it above an interjection's echo until the echo
@@ -176,4 +176,34 @@ test('fresh input ignores queued sends and takes the newest of the rest', () => 
   assert.equal(freshInputAt([{ placement: 'queued', time: 300 }], undefined), 0)
   assert.equal(freshInputAt(undefined, 400), 400)
   assert.equal(freshInputAt([], undefined), 0)
+})
+
+test('workEntryFor scopes host work entries to own chat, group work, or room self switches', () => {
+  const bot = { id: 'b1' }
+  const room = { id: 'r1' }
+  const groupWork = { bot, room }
+  const work = {
+    bots: {
+      b1: { tool: 'cli', note: 'Run npm test', since: 10 },
+      b2: { tool: 'cli', note: 'In room', roomId: 'r1', since: 20 },
+    },
+    rooms: {
+      r1: [
+        { botId: 'b1', tool: 'read', note: 'Read header.js', since: 30 },
+        { self: true, switching: true, since: 40 },
+      ],
+    },
+  }
+  assert.deepEqual(workEntryFor({ bot, work }), { tool: 'cli', note: 'Run npm test', since: 10 })
+  assert.equal(workEntryFor({ bot: { id: 'b2' }, work }), null, 'group work does not hijack own chat')
+  assert.deepEqual(workEntryFor({ bot, groupWork, work }), { botId: 'b1', tool: 'read', note: 'Read header.js', since: 30 })
+  assert.deepEqual(workEntryFor({ room, work }), { self: true, switching: true, since: 40 })
+})
+
+test('localToolOf exposes local CLI tool notes and ignores switching or native tools', () => {
+  assert.deepEqual({ ...localToolOf({ tool: 'cli', note: 'Run git diff' }, 123) }, { label: 'Run git diff', state: 'working', at: 123 })
+  assert.deepEqual({ ...localToolOf({ tool: 'read', note: 'Read src/client/cells.js' }, 456) }, { label: 'Read src/client/cells.js', state: 'searching', at: 456 })
+  assert.equal(localToolOf({ tool: 'cli', note: 'Run npm test', switching: true }, 1), null)
+  assert.equal(localToolOf({ tool: 'pwsh', note: 'native tool' }, 1), null)
+  assert.equal(localToolOf({ tool: 'cli', note: '   ' }, 1), null)
 })

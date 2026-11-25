@@ -603,6 +603,7 @@ export const FR = {
   "Couldn’t steer the queued messages. Try again.": "Impossible d’envoyer immédiatement les messages en file d’attente. Réessayez.",
   "{n} queued messages": "{n} messages en file d’attente",
   "Sending…": "Envoi…",
+  "Queued": "En file",
   "Queued image": "Image en file d’attente",
   "Queued file {name}": "Fichier {name} en file d’attente",
   "Edit queued message": "Modifier le message en file d’attente",

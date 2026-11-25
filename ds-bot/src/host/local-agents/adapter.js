@@ -119,6 +119,11 @@ function digestChunks(messages) {
 const RESUME_RETRIED = Symbol('resume retried')
 const positiveInt = value => (Number.isSafeInteger(value) && value > 0 ? value : undefined)
 const nonNegativeInt = value => (Number.isSafeInteger(value) && value >= 0 ? value : undefined)
+const promptBlocksKey = blocks => JSON.stringify((Array.isArray(blocks) ? blocks : []).map(block => (
+  block?.type === 'text'
+    ? { type: 'text', text: String(block.text ?? '').trim() }
+    : block
+)))
 
 export class LocalAgentAdapter extends LlmAdapter {
   // deps: {rt, findExecutable, spawnEngine(kind,route,engine), record(sessionId),
@@ -642,6 +647,7 @@ export class LocalAgentAdapter extends LlmAdapter {
   // The turn under way ends: the CLI stops, and a call it waits on gets an answer.
   stopTurn(live, reason) {
     live.state = 'idle'
+    live.activePromptKey = undefined
     live.stopped = true
     live.queue.length = 0
     const stopped = live.engineSession === undefined ? undefined : live.engine.cancel?.(live.engineSession)
@@ -1274,6 +1280,13 @@ export class LocalAgentAdapter extends LlmAdapter {
       : mergeTextBlocks([{ type: 'text', text: settled }, ...blocks])
     if (live.state !== 'idle') {
       if (live.spec.kind === 'acp') {
+        const key = promptBlocksKey(blocks)
+        const lastQueued = live.queue.at(-1)
+        const lastQueuedBlocks = lastQueued === undefined ? undefined : (Array.isArray(lastQueued) ? lastQueued : lastQueued.blocks)
+        if (key !== '[]' && (
+          (lastQueuedBlocks !== undefined && promptBlocksKey(lastQueuedBlocks) === key)
+          || (lastQueued === undefined && live.activePromptKey === key)
+        )) return Promise.resolve()
         live.queue.push({ blocks, ...(flushedContext !== undefined && flushedContext.length > 0 ? { flushedContext } : {}) })
         return Promise.resolve()
       }
@@ -1324,11 +1337,11 @@ export class LocalAgentAdapter extends LlmAdapter {
   // Codex resolves on acceptance; ACP resolves only when the entire turn ends.
   startTurn(live, input, signal, effort) {
     if (live.dead) return Promise.resolve()
-    if (live.stopped) {
-      this.discardTurnOutput(live)
-      live.stopped = false
-    }
+    // Drop any leftover non-request events from open()/session/load or an earlier turn.
+    this.discardTurnOutput(live)
+    live.stopped = false
     const blocks = typeof input === 'string' ? [{ type: 'text', text: input }] : input
+    live.activePromptKey = promptBlocksKey(blocks)
     live.state = 'running'
     live.turnConfirmed = false
     live.scheduleIdle()
@@ -1572,6 +1585,7 @@ export class LocalAgentAdapter extends LlmAdapter {
           yield* closeBlocks()
           if (event.usage !== undefined) yield addUsage(event.usage)
           live.state = 'idle'
+          live.activePromptKey = undefined
           this.flushContext(live)
           // Input queued while this turn ran goes out as the next prompt
           // inside the same drain (ACP takes one prompt at a time).
@@ -1590,6 +1604,7 @@ export class LocalAgentAdapter extends LlmAdapter {
         }
         case 'error': {
           live.state = 'idle'
+          live.activePromptKey = undefined
           throw toLlmError(event.error, live)
         }
         default: break

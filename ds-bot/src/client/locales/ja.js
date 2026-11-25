@@ -603,6 +603,7 @@ export const JA = {
   "Couldn’t steer the queued messages. Try again.": "待機中のメッセージを割り込み送信できませんでした。再試行してください。",
   "{n} queued messages": "待機中のメッセージ {n} 件",
   "Sending…": "送信中…",
+  "Queued": "待機中",
   "Queued image": "待機中の画像",
   "Queued file {name}": "待機中のファイル {name}",
   "Edit queued message": "待機中のメッセージを編集",

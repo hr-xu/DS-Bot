@@ -692,6 +692,13 @@ export function install(rt) {
     }
     if (rt.groupOwners.has(id)) rt.touchRoomTurn?.(id)
     if (event.type !== 'activity' && event.type !== 'status') return
+    if (event.type === 'status' && event.done === true) {
+      if (entry.localDoing !== undefined) {
+        entry.localDoing = undefined
+        showCall(id, entry)
+      }
+      return
+    }
     const text = String(event.text ?? '').replace(/^\s*▸\s*/, '').trim()
     // A call to DS Bot's own MCP server is dispatched by DSH and counted there. An
     // adapter that knows the call is a team call marks it; the name fallback covers a

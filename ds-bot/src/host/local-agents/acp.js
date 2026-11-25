@@ -238,6 +238,7 @@ export class AcpEngine {
     return {
       dshSessionId,
       acpSessionId: undefined,
+      running: false,
       dead: false,
       modes: [],
       toolCalls: new Map(),
@@ -276,15 +277,19 @@ export class AcpEngine {
     if (session.running && typeof update.sessionUpdate === 'string') session.promptTurn?.onProgress?.()
     switch (update.sessionUpdate) {
       case 'agent_message_chunk':
+        // Ignore session/load history replays and trailing chunks outside an active prompt.
+        if (session.running !== true) break
         if (session.promptTurn !== undefined) session.promptTurn.sawStepWork = true
         session.push({ type: 'text', text: textOf(update.content) })
         break
       case 'agent_thought_chunk':
+        if (session.running !== true) break
         if (session.promptTurn !== undefined) session.promptTurn.sawStepWork = true
         session.push({ type: 'thought', text: textOf(update.content) })
         break
       case 'tool_call':
       case 'tool_call_update': {
+        if (session.running !== true) break
         if (session.promptTurn !== undefined) session.promptTurn.sawStepWork = true
         // A permission request names the call only by id; its title, kind and
         // input came with the call's own updates, so they are kept here.
@@ -323,6 +328,8 @@ export class AcpEngine {
             session.reportedToolCalls.delete(session.reportedToolCalls.values().next().value)
           }
         }
+        const activeTools = session.promptTurn?.activeTools
+        const finished = update.status === 'completed' || update.status === 'failed'
         if (!reported) {
           if (update.status === 'failed' && !alreadyFailed) {
             markReported()
@@ -333,12 +340,23 @@ export class AcpEngine {
           }
         } else if (update.status === 'failed' && !alreadyFailed) {
           session.push({ type: 'activity', text: `▸ ${described} — failed`, failed: true, ...(team ? { team: true } : {}) })
-        } else if (update.status !== 'completed' && known !== undefined && described !== describeCall(known)) {
+        } else if (!finished && known !== undefined && described !== describeCall(known)) {
           session.push({ type: 'status', text: described, ...(team ? { team: true } : {}) })
+        }
+        if (activeTools !== undefined && id !== undefined && !team) {
+          if (finished) {
+            if (activeTools.delete(id)) {
+              const next = [...activeTools.values()].at(-1)
+              session.push(next !== undefined ? { type: 'status', text: next, team: false } : { type: 'status', done: true, team: false })
+            }
+          } else if (!isAnonymousMcpPlaceholder(call)) {
+            activeTools.set(id, described)
+          }
         }
         break
       }
       case 'plan':
+        if (session.running !== true) break
         if (session.promptTurn !== undefined) session.promptTurn.sawStepWork = true
         session.push({ type: 'thought', text: planText(update.entries) })
         break
@@ -681,6 +699,7 @@ export class AcpEngine {
       steps: 0,
       lastUsed: undefined,
       sawStepWork: false,
+      activeTools: new Map(),
     }
     const onAbort = () => { turn.cancelled = true }
     signal?.addEventListener('abort', onAbort, { once: true })
