@@ -12,7 +12,7 @@ export const BROWSER_ALLOWED = new Set([
   'chat', 'room-chat', 'send', 'stage-image', 'stage-file', 'image', 'markdown-image',
   'file-text', 'file-download', 'stop-chat', 'stop-room-work',
   'answer-question', 'dismiss-question', 'view-reply', 'dismiss-view',
-  'approval-answer', 'btw-delete', 'secret-cancel', 'connector-request-cancel',
+  'approval-answer', 'approval-allow-session', 'btw-delete', 'secret-cancel', 'connector-request-cancel',
   'resume-work', 'cancel-work', 'resume-room-pause',
   // Bot background tasks
   'bot-stop-task',

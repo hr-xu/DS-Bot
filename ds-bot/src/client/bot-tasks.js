@@ -258,14 +258,14 @@ export function TaskIslandPanel({ bot, room, roster, approvals = [], focusTaskId
   const taskActive = task !== undefined && isActiveTask(task)
   const panelSubject = room?.sessionId ?? room?.id ?? bot?.sessionId ?? bot?.id ?? targetId
 
-  const answerApproval = (choice) => {
+  const answerApproval = (choice, scope) => {
     if (busy || readOnly || !approvalItem) return
     if (approvalItem.kind === 'tool' && choice === 'always' && !canAlways) return
     setBusy(true)
     setError('')
     const promise = approvalItem.kind === 'computer-app'
       ? actions.computerAppAnswer(approvalItem.ask.id, choice)
-      : actions.answerApproval(approvalItem.approval.id, choice)
+      : actions.answerApproval(approvalItem.approval.id, choice, scope)
     void Promise.resolve(promise)
       .catch(err => setError(hostText(err?.message ?? String(err))))
       .finally(() => setBusy(false))
@@ -393,6 +393,9 @@ export function TaskIslandPanel({ bot, room, roster, approvals = [], focusTaskId
           : isApproval
             ? h(Fragment, null,
                 h('button', { type: 'button', className: 'bt-btask-btn', disabled: busy || readOnly, onClick: () => answerApproval('reject') }, t('Reject')),
+                approvalItem.approval?.tool === 'approve_agent_action'
+                  ? h('button', { type: 'button', className: 'bt-btask-btn', disabled: busy || readOnly, onClick: () => answerApproval('allow', 'session') }, t('Allow for session'))
+                  : null,
                 h('button', { type: 'button', className: 'bt-btask-btn is-primary', disabled: busy || readOnly, onClick: () => answerApproval('allow') }, t('Allow once')),
                 canAlways
                   ? h('button', { type: 'button', className: 'bt-btask-btn', disabled: busy || readOnly, onClick: () => answerApproval('always') }, t('Always allow'))

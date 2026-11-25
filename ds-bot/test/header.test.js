@@ -316,3 +316,96 @@ test('a group chat header mounts the approval bar in the top island and answers 
   const taskCards = findAll(withBackground, node => node.props?.className === 'bt-task-focus-card')
   assert.ok(taskCards.every(card => !JSON.stringify(card).includes('ap-front')), 'the foreground request is not duplicated in the task deck')
 })
+
+test('a 1:1 Bot chat surfaces subagent and fallback approvals in the header island without duplicating an active composer approval', () => {
+  const botRoster = {
+    byId: { a: { id: 'a', name: 'Chief', sessionId: 'a' } },
+    roomsById: {},
+    bots: [], exchangeTurns: {}, questions: {},
+  }
+  const expand = (node) => {
+    if (node === null || node === undefined || typeof node !== 'object') return node
+    if (Array.isArray(node)) return node.map(expand)
+    if (typeof node.type === 'function') return expand(node.type({ ...node.props, children: node.children }))
+    return { ...node, children: (node.children ?? []).map(expand) }
+  }
+  const findAll = (node, match, out = []) => {
+    if (node === null || node === undefined || typeof node !== 'object') return out
+    if (Array.isArray(node)) { node.forEach(item => findAll(item, match, out)); return out }
+    if (match(node)) out.push(node)
+    for (const child of node.children ?? []) findAll(child, match, out)
+    return out
+  }
+  const calls = []
+  const actions = {
+    beginVisit() {}, endVisit() {},
+    toggleApproval: id => calls.push(['toggleApproval', id]),
+    answerApproval: (id, choice, scope) => { calls.push(['answerApproval', id, choice, scope]); return Promise.resolve() },
+    openSession: id => calls.push(['openSession', id]),
+  }
+  const renderDm = ({ approvals, statuses = new Map(), uiState = { approvalOpen: null }, sessionId = 'a', customRoster = botRoster }) => expand(HeaderPill({
+    sessionId,
+    useRoster: hook(customRoster),
+    useSessions: hook({ byId: {} }),
+    useSessionStatus: hook(statuses),
+    useSession: hook({}),
+    useActivity: hook({}),
+    useMemoryNews: hook({}),
+    useTurnClock: hook({}),
+    useUi: hook(uiState),
+    useLive: hook({}),
+    useWork: hook({ rooms: {}, approvals }),
+    useComputer: hook({ asks: {} }),
+    actions,
+  }))
+
+  // Foreground 1:1 approval already held by the inline composer does not duplicate in the header.
+  const activeComposer = new Map([['a', { pendingInteraction: { kind: 'approval', toolName: 'approve_agent_action' } }]])
+  const dupCheck = renderDm({
+    approvals: [{ id: 'ap-fg', botId: 'a', sessionId: 'a', tool: 'approve_agent_action', reason: 'Run npm test', answerable: true, at: 100 }],
+    statuses: activeComposer,
+  })
+  assert.equal(findAll(dupCheck, node => node.props?.className === 'bt-apv-bar').length, 0)
+
+  // Foreground 1:1 approval whose composer prompt did not mount falls back to the header island with direct action buttons.
+  const fallback = renderDm({
+    approvals: [{ id: 'ap-fg', botId: 'a', sessionId: 'a', tool: 'approve_agent_action', reason: 'Run npm test', answerable: true, at: 100 }],
+    uiState: { approvalOpen: 'a' },
+  })
+  const fallbackPanel = findAll(fallback, node => node.props?.className === 'bt-apv-panel')
+  assert.equal(fallbackPanel.length, 1)
+  const fallbackBtns = findAll(fallbackPanel[0], node => node.type === 'button')
+  assert.deepEqual(fallbackBtns.map(btn => (btn.children ?? []).join('')), ['Reject', 'Allow for session', 'Allow once'])
+  fallbackBtns[1].props.onClick()
+  assert.deepEqual(calls, [['answerApproval', 'ap-fg', 'allow', 'session']])
+
+  // A 1:1 subagent approval (sessionId !== DM sessionId) surfaces in the header island even when the DM composer has an approval.
+  calls.length = 0
+  const subagent = renderDm({
+    approvals: [{ id: 'ap-sub', botId: 'a', sessionId: 'sub-1', tool: 'bash', reason: 'Check git status', answerable: true, at: 200 }],
+    statuses: activeComposer,
+    uiState: { approvalOpen: 'a' },
+  })
+  const subBtns = findAll(findAll(subagent, node => node.props?.className === 'bt-apv-panel')[0], node => node.type === 'button')
+  assert.deepEqual(subBtns.map(btn => (btn.children ?? []).join('')), ['Reject', 'Allow once'])
+  subBtns[1].props.onClick()
+  assert.deepEqual(calls, [['answerApproval', 'ap-sub', 'allow', undefined]])
+
+  // A group member's work session surfaces that member's pending group approval directly.
+  calls.length = 0
+  const groupWorkRoster = {
+    ...botRoster,
+    roomsById: { r1: { id: 'r1', name: 'Ops', members: ['a'] } },
+    groupSessionOf: { 'r1-a': { room: { id: 'r1', name: 'Ops', members: ['a'] }, bot: botRoster.byId.a } },
+  }
+  const workView = renderDm({
+    sessionId: 'r1-a',
+    customRoster: groupWorkRoster,
+    approvals: [{ id: 'ap-gw', botId: 'a', roomId: 'r1', sessionId: 'r1-a', tool: 'bash', reason: 'Run build', answerable: true, at: 300 }],
+    uiState: { approvalOpen: 'r1-a' },
+  })
+  const gwBtns = findAll(findAll(workView, node => node.props?.className === 'bt-apv-panel')[0], node => node.type === 'button')
+  assert.deepEqual(gwBtns.map(btn => (btn.children ?? []).join('')), ['Reject', 'Allow once'])
+  gwBtns[1].props.onClick()
+  assert.deepEqual(calls, [['answerApproval', 'ap-gw', 'allow', undefined]])
+})

@@ -262,3 +262,23 @@ test('AgentApprovalCard supports Reject, Allow for session, and Allow once in 1:
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(log, [['session', 's1', 'c1'], ['answer', 'allowed-once']])
 })
+
+test('AgentApprovalCard falls back to raw reason when resolveReason returns undefined or throws', () => {
+  const matched = {
+    key: 'approval:2',
+    sessionId: 's1',
+    toolName: 'approve_agent_action',
+    callId: 'c2',
+    reason: 'Run command\nnpm test',
+    displayReason: { en: 'Run command\nnpm test' },
+    answerable: true,
+    answer: () => Promise.resolve(),
+  }
+  for (const resolveReason of [() => undefined, () => '', () => { throw new Error('no locale') }]) {
+    const nodes = expand(AgentApprovalCard({ matched, sessionId: 's1', actions: {}, resolveReason }))
+    const title = nodes.find(node => node.props?.className === 'bt-approval-title')
+    const detail = nodes.find(node => node.props?.className === 'bt-approval-detail')
+    assert.equal((title?.children ?? []).join(''), 'Run command')
+    assert.equal((detail?.children ?? []).join(''), 'npm test')
+  }
+})

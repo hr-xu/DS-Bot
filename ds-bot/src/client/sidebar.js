@@ -294,7 +294,9 @@ function AgentRow({ agent, actions, useSessions, useSessionStatus, useUi, wide, 
     }
   }).sort((a, b) => b.at - a.at)))
   const statusInfo = useSessionStatus(map => JSON.stringify(agent.sessions.map(id => ({
-    id, running: map.get(id)?.running === true, unread: map.get(id)?.completionUnread === true,
+    id,
+    running: map.get(id)?.running === true,
+    unread: map.get(id)?.completionUnread === true || map.get(id)?.pendingInteraction !== undefined,
   }))))
   const sessions = useMemo(() => {
     const statuses = Object.fromEntries(JSON.parse(statusInfo).map(entry => [entry.id, entry]))

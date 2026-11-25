@@ -71,6 +71,7 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
     return () => document.body.style.removeProperty('--bt-first-sep')
   }, [opening])
   const running = useSessionStatus(map => map.get(sessionId)?.running === true)
+  const hasComposerApproval = useSessionStatus(map => map.get(sessionId)?.pendingInteraction?.kind === 'approval')
   const groupWork = roster.groupSessionOf?.[sessionId]
   const bot = roster.byId[sessionId] ?? groupWork?.bot
   const owner = bot?.id ?? sessionId
@@ -97,27 +98,46 @@ export function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus
   // folder changes, so the two differ for every group whose folder was changed.
   const goalCompose = useUi(state => room !== undefined && state.goalCompose === room.id)
   const goalOpen = useUi(state => room !== undefined && state.goalOpen === room.id)
-  const approvalTargetId = room?.id ?? bot?.id
+  const approvalTargetId = room?.id ?? (groupWork ? sessionId : bot?.id)
   const approvalOpen = useUi(state => approvalTargetId !== undefined && state.approvalOpen === approvalTargetId)
   const taskDeckState = useUi(state => (approvalTargetId !== undefined && state.taskDeck?.targetId === approvalTargetId ? state.taskDeck : null))
   const taskDeckOpen = taskDeckState !== null
-  const chatTasks = !away ? tasksForChat({ bot, room, roster }) : []
+  const chatTasks = !away && !groupWork ? tasksForChat({ bot, room, roster }) : []
   const activeTasks = chatTasks.filter(isActiveTask)
-  // The island's live faces and pending approvals: non-group chats subscribe only
-  // to their own Bot's background-task approvals so unrelated group work does not redraw them.
+  // The island's live faces and pending approvals: non-group chats surface any
+  // answerable approval for this Bot that is not already held by this Session's
+  // inline composer (background-task approvals, subagent approvals, or any foreground
+  // approval whose inline composer card did not mount on this Session). Group member
+  // work sessions surface that member's pending approvals in its group.
   const roomWorkKey = useWork?.(work => (room ? JSON.stringify(work.rooms?.[room.id] ?? []) : '')) ?? '[]'
   const roomWork = room ? JSON.parse(roomWorkKey || '[]') : []
   const workApprovalsKey = useWork?.(work => (room
     ? JSON.stringify((work.approvals ?? []).filter(entry => entry.roomId === room.id))
-    : bot
-      ? JSON.stringify((work.approvals ?? []).filter(entry => entry.botId === bot.id && entry.roomId === undefined && entry.answerable === true))
+    : groupWork
+      ? JSON.stringify((work.approvals ?? []).filter(entry => entry.roomId === groupWork.room.id && entry.botId === groupWork.bot.id && entry.answerable === true))
+      : bot
+        ? JSON.stringify((work.approvals ?? []).filter(entry => (
+          entry.botId === bot.id
+          && entry.roomId === undefined
+          && entry.answerable === true
+          && (entry.taskId !== undefined || (entry.sessionId !== undefined && entry.sessionId !== sessionId) || !hasComposerApproval)
+        )))
+        : '')) ?? '[]'
+  const computerAsksKey = useComputer?.(comp => (room
+    ? JSON.stringify(Object.values(comp?.asks ?? {}).filter(ask => ask.roomId === room.id))
+    : groupWork
+      ? JSON.stringify(Object.values(comp?.asks ?? {}).filter(ask => ask.roomId === groupWork.room.id && ask.botId === groupWork.bot.id))
       : '')) ?? '[]'
-  const computerAsksKey = useComputer?.(comp => (room ? JSON.stringify(Object.values(comp?.asks ?? {}).filter(ask => ask.roomId === room.id)) : '')) ?? '[]'
   const approvals = room
     ? roomApprovals(room, { approvals: JSON.parse(workApprovalsKey || '[]') }, { asks: JSON.parse(computerAsksKey || '[]') }, roster)
-    : bot
-      ? JSON.parse(workApprovalsKey || '[]').map(entry => ({ kind: 'tool', id: entry.id, bot, approval: entry, at: entry.at ?? 0 }))
-      : []
+    : groupWork
+      ? [
+        ...JSON.parse(computerAsksKey || '[]').map(ask => ({ kind: 'computer-app', id: ask.id, bot, ask, at: ask.at ?? 0 })),
+        ...JSON.parse(workApprovalsKey || '[]').map(entry => ({ kind: 'tool', id: entry.id, bot, approval: entry, at: entry.at ?? 0 })),
+      ].sort((left, right) => right.at - left.at)
+      : bot
+        ? JSON.parse(workApprovalsKey || '[]').map(entry => ({ kind: 'tool', id: entry.id, bot, approval: entry, at: entry.at ?? 0 }))
+        : []
   const view = goal ? goalView(goal, { roster, roomWork }) : null
   const goalShown = room !== undefined && !away && goal !== undefined
   const subjectId = bot?.id ?? room?.id ?? sessionId

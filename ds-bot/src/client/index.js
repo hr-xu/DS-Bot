@@ -1689,7 +1689,12 @@ export function apply(ctx) {
     () => shadow('conversation.composer', {
       priority: BOT_PRIORITY,
       select: owner => (owner.pendingInteraction?.kind === 'approval' && owner.pendingInteraction?.toolName === 'approve_agent_action' ? owner.pendingInteraction : null),
-      inject: () => ({ ...face(), resolveReason: reason => ctx.locale?.resolveText?.(reason) }),
+      inject: () => ({
+        ...face(),
+        resolveReason: (reason) => {
+          try { return ctx.get?.('locale')?.resolveText?.(reason) } catch { return undefined }
+        },
+      }),
     }, AgentApprovalCard),
     () => shadow('conversation.input.dock', { id: 'bot-readonly', order: -140, inject: face }, ReadOnlyDock),
     () => shadow('conversation.input.dock', { id: 'bot-paste', order: -130, inject: face }, PasteDock),

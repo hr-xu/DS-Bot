@@ -166,7 +166,7 @@ const cardHead = (bot, at, label) => h('div', { className: 'bt-mw-head' },
   label ? h('span', { className: 'bt-mw-tool' }, label) : null,
   typeof at === 'number' ? h(Elapsed, { at, className: 'bt-mw-time' }) : null)
 
-export function ApprovalCard({ approval, bot, actions, showBot = false, readOnly = false }) {
+export function ApprovalCard({ approval, bot, actions, showBot = false, readOnly = false, allowDirect = false }) {
   const [busy, setBusy] = useState(false)
   const canAlways = Boolean(approval.alwaysAllow) && !readOnly
   const answer = (choice, scope) => {
@@ -188,9 +188,10 @@ export function ApprovalCard({ approval, bot, actions, showBot = false, readOnly
     approval.review ? h('div', { className: 'bt-mw-reason', role: 'status' }, approval.review.status === 'reviewing' ? t('Reviewing this action…') : approval.review.reason) : null,
     approval.detail?.code ? h('code', { className: 'bt-mw-code', title: approval.detail.code }, approval.detail.code) : null,
     scopeText ? h('div', { className: 'bt-mw-scope' }, scopeText) : null,
-    // Answering here resolves the request and withdraws the Bot's own DSH card,
-    // so group, task and own-chat approvals all get buttons.
-    approval.answerable
+    // Group, background-task, and header-island approvals are answered directly
+    // through DS Bot; approvals for another Bot's own chat shown inside a group
+    // drawer keep their link to that Bot's chat.
+    approval.answerable && (allowDirect || approval.roomId !== undefined || approval.taskId !== undefined)
       ? h('div', { className: 'bt-mw-actions' },
         h('button', { type: 'button', className: 'bt-q-btn', disabled: busy || readOnly, onClick: () => answer('reject') }, t('Reject')),
         approval.tool === 'approve_agent_action'
@@ -227,9 +228,13 @@ export function ComputerAppApprovalCard({ ask, bot, actions, showBot = false }) 
 // leaving all other DSH approvals to DSH's own ApprovalPanel.
 function AgentApprovalFlow({ approval, sessionId, actions, resolveReason }) {
   const [busy, setBusy] = useState(false)
-  const raw = approval.displayReason !== undefined && typeof resolveReason === 'function'
-    ? resolveReason(approval.displayReason)
-    : approval.reason
+  let raw = approval.reason
+  if (approval.displayReason !== undefined && typeof resolveReason === 'function') {
+    try {
+      const resolved = resolveReason(approval.displayReason)
+      if (resolved !== undefined && resolved !== null && String(resolved).trim() !== '') raw = resolved
+    } catch { /* fall back to raw reason */ }
+  }
   const text = String(raw ?? '').trim()
   const [headline, ...rest] = text.split('\n')
   const detail = rest.join('\n').trim()
@@ -365,7 +370,7 @@ export function ApprovalIslandPod({ approvals, open, room, targetId = room?.id, 
     open ? h('div', { className: 'bt-apv-panel', role: 'region', 'aria-label': t('Waiting for your approval') },
       approvals.map(item => (item.kind === 'computer-app'
         ? h(ComputerAppApprovalCard, { key: `c:${item.id}`, ask: item.ask, bot: item.bot, actions, showBot: true })
-        : h(ApprovalCard, { key: `t:${item.id}`, approval: item.approval, bot: item.bot, actions, showBot: true, readOnly })))) : null)
+        : h(ApprovalCard, { key: `t:${item.id}`, approval: item.approval, bot: item.bot, actions, showBot: true, readOnly, allowDirect: true })))) : null)
 }
 
 export function useMemberWork(room, useWork, useComputer) {
