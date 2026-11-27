@@ -848,7 +848,6 @@ export const KO = {
   'Group · {preset}': '그룹 · {preset}',
   'Group permissions': '그룹 권한',
   'Inherited from {name}': '{name}에서 상속됨',
-  'Permission: {preset}': '권한: {preset}',
   'Same for every member': '모든 멤버에 동일 적용',
   "Replaces each member's own permissions in this group.": '이 그룹 내에서 각 멤버의 개별 권한을 대체합니다.',
   'The only Main Bot. To hand the role to another Bot, use Main Bot on the Bots page.': '유일한 메인 Bot입니다. 다른 Bot에게 역할을 넘기려면 Bot 페이지의 메인 Bot 설정을 이용하세요.',

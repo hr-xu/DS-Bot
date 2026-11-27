@@ -754,7 +754,6 @@ const ZH = {
   'Group · {preset}': '群 · {preset}',
   'Group permissions': '群权限',
   'Inherited from {name}': '沿用群「{name}」的权限',
-  'Permission: {preset}': '权限：{preset}',
   'Same for every member': '全员统一',
   "Replaces each member's own permissions in this group.": '在这个群里代替各成员自己的权限。',
   'The only Main Bot. To hand the role to another Bot, use Main Bot on the Bots page.': '这是唯一的主 Bot。要把主 Bot 交给别的 Bot，请到「Bot」页的主 Bot 里换。',

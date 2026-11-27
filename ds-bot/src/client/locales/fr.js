@@ -831,7 +831,6 @@ export const FR = {
   "Group · {preset}": "Groupe · {preset}",
   "Group permissions": "Autorisations du groupe",
   "Inherited from {name}": "Hérité de {name}",
-  "Permission: {preset}": "Autorisation : {preset}",
   "Same for every member": "Identique pour tous les membres",
   "Replaces each member's own permissions in this group.": "Remplace les autorisations individuelles de chaque membre dans ce groupe.",
   "The only Main Bot. To hand the role to another Bot, use Main Bot on the Bots page.": "C’est le seul Bot principal. Pour confier ce rôle à un autre Bot, utilisez la section Bot principal sur la page Bots.",

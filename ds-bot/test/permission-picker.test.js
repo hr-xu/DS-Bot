@@ -191,7 +191,7 @@ test('review uses the same single choice and save queue as ordinary permissions'
   picker.requests[1].resolve(true)
   const tree = picker.rerender({ saved: 'read-only' })
   await picker.flush()
-  assert.equal(tree.props.children.filter(button => button.props['aria-pressed']).length, 1)
+  assert.equal(walk(tree).filter(button => button.props?.['aria-pressed']).length, 1)
 })
 
 test('repick still lets the shown preset be picked again', async () => {
@@ -257,7 +257,7 @@ test('BotPermissionPill switches a 1:1 Bot preset and shows local-CLI note when 
 
   pill.open()
   const items = pill.options()
-  assert.equal(items.length, 3)
+  assert.equal(items.length, OPTIONS.length)
   const note = walk(pill.tree()).find(node => node.props?.className === 'bt-perm-menu-note')
   assert.equal(textOf(note), 'Applies to Antigravity: Workspace prompts on shell commands; Full access runs without asking.')
 
@@ -277,7 +277,7 @@ test('BotPermissionPill toggles group chats between Per member and group-wide pr
 
   pill.open()
   const items = pill.options()
-  assert.equal(items.length, 4)
+  assert.equal(items.length, OPTIONS.length + 1)
   assert.equal(items[0].props['aria-checked'], true)
 
   items[3].props.onClick()

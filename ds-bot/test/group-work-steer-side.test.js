@@ -192,17 +192,24 @@ async function startGroupSteerEnv() {
     }
     await new Promise(r => setTimeout(r, 0))
   }
+  const emitStream = async (id, frame = { type: 'start' }) => {
+    const agent = agentMap.get(id)
+    for (const listener of ctx.listeners.get('agent/assistant-stream') ?? []) {
+      await listener({ agent, frame })
+    }
+    await new Promise(r => setTimeout(r, 0))
+  }
   const stop = async () => {
     await ctx.dispose()
     rmSync(home, { recursive: true, force: true, maxRetries: 5 })
   }
-  return { rt, call, emit, stop, agentMap, agentCalls, roomFollowups, shellCalls, llmRequests }
+  return { rt, call, emit, emitStream, stop, agentMap, agentCalls, roomFollowups, shellCalls, llmRequests }
 }
 
 test('in-place user steer in a group member session cuts the model stream, logs to the group ledger, and preserves batch barriers', async (t) => {
   const env = await startGroupSteerEnv()
   t.after(env.stop)
-  const { rt, emit, agentMap, agentCalls, roomFollowups } = env
+  const { rt, emit, emitStream, agentMap, agentCalls, roomFollowups } = env
   const writerAgent = agentMap.get('gw-w1')
 
   // Both Writer (gw-w1) and Coder (gw-c1) start group turns called by Chief (m1) in batch b-1.
@@ -227,6 +234,7 @@ test('in-place user steer in a group member session cuts the model stream, logs 
     content: [{ type: 'text', text: '[Group chat "Launch"]\nChief: @Writer @Coder split the work' }],
   }, 101)
   await emit('gw-w1', 'step/start', { turn: 1, step: 0 }, 102)
+  await emitStream('gw-w1', { type: 'start' })
 
   // User types an in-place steer directly in gw-w1 while the model is streaming!
   const steerMsg = { id: 'u-steer-1', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Keep adapter.js backward-compatible' }] }

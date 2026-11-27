@@ -831,7 +831,6 @@ export const JA = {
   "Group · {preset}": "グループ・{preset}",
   "Group permissions": "グループ権限",
   "Inherited from {name}": "{name} から継承",
-  "Permission: {preset}": "権限：{preset}",
   "Same for every member": "メンバー全員に適用",
   "Replaces each member's own permissions in this group.": "このグループ内では各メンバー個別の権限より優先されます。",
   "The only Main Bot. To hand the role to another Bot, use Main Bot on the Bots page.": "唯一のメイン Bot です。別の Bot に役割を引き継ぐには、「Bot」ページのメイン Bot 設定から変更してください。",

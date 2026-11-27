@@ -1167,6 +1167,7 @@ test('ACP ignores session/load history replay chunks while idle, clears active t
     engineSession: {},
     engine: { prompt: (_s, blocks) => { prompts.push(blocks); return new Promise(() => {}) } },
     push: () => {},
+    scheduleIdle: () => {},
   }
   await adapter.sendInput(live, [{ type: 'text', text: 'check permissions' }])
   assert.deepEqual(live.events.map(e => e.type), ['permission'], 'startTurn discards stale text events while preserving permission requests')
